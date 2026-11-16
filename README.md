@@ -1,21 +1,40 @@
 # 文档治理主仓库
 
-本仓库对应 `https://github.com/leiw5173/docs_center`，与官网文档后端是**两个独立仓库**。
+本仓库用于统一维护文档来源、目录、语言、引用关系和发布审核记录，由文档团队通过 GitHub Issue 与 Pull Request 协作维护。文档正文保存在各业务仓库。
 
-这里维护来源登记、目录与语言治理、引用关系、候选发布清单、Issue 表单和发布 PR。不存正文副本，不连接生产数据库、Redis 或 OSS。后端负责获取固定来源、转换正文/资源、切换发布版本、执行同步并回报。
+## 仓库任务
+
+- 登记来源仓库、分支、语言和目标目录。
+- 维护目录归属、文档引用、地址迁移、标签与反馈。
+- 检查候选文档的链接、资源、目录结构和配套信息。
+- 生成候选发布清单，记录来源修订、检查结果和预览。
+- 由文档团队核对并手动合并发布 PR，保留变更与确认记录。
 
 ## 查看真实来源
 
-当前已核实 14 个真实来源仓库，13 个已登记到现有五栏目；课程仓库保留为待归类来源。查看 [来源仓库与正文入口](docs/source-import.md)、[可执行来源登记](document-center/registry.json) 或 [完整核验清单](document-center/source-inventory.json)。来源登记不代表已发布，正文继续保存在各业务仓库。
+当前已核实 14 个真实来源仓库，13 个已登记到现有五栏目；课程仓库保留为待归类来源。
 
-## 文档团队操作
+- [来源仓库与正文入口](docs/source-import.md)
+- [来源登记](document-center/registry.json)
+- [完整核验清单](document-center/source-inventory.json)
 
-1. 新增来源：提交“文档仓库接入或调整”Issue，填写来源、语言、目标栏目、路径前缀和目录层级。机器人生成登记 PR，文档团队核对合并后，后端登记来源并生成首个候选。
-2. 日常更新：在业务仓库合并正文、`index.md`、`sidebar_position` 修改。已验签的后端 Webhook 向本仓库发送固定 SHA 事件，自动创建或更新对应语言的发布 PR。
-3. 查看 PR 的 `document-release-checks` 检查报告和 `document-release-preview` 后端预览 Artifact。后端按同一清单重新取固定正文/资源，使用正式渲染器生成隔离的静态预览，不切换线上版本。正文、资源、目录链接问题回业务仓库修改；迁移、引用登记、标签、反馈通过“补充发布 PR 的治理信息”Issue 更新 PR，无需编辑 JSON。
-4. 文档团队核对预览、完整性和版本归档，手动合并发布 PR。受保护发布工作流通知后端，后端再次核对合并身份、检查结果和固定清单，再执行原子切换。
+## 日常维护
 
-`document-center/registry.json` 已导入本轮核实的真实来源。后续新增或调整通过接入表单提交；测试夹具不会自动成为正式来源。
+1. **接入或调整来源**：提交[文档仓库接入或调整](https://github.com/leiw5173/docs_center/issues/new?template=document-registration.yml)申请，填写来源仓库、语言、目标栏目和目录信息，由文档团队核对登记 PR。
+2. **更新文档内容**：在对应业务仓库修改正文、资源、目录 `index.md` 和排序信息，按该仓库规则提交、合并 PR；在本仓库跟进对应的候选发布 PR。
+3. **处理检查问题**：查看 PR 检查报告和预览。正文、资源、目录链接问题回业务仓库修正；地址迁移、引用、标签或反馈通过[治理信息表单](https://github.com/leiw5173/docs_center/issues/new?template=document-governance.yml)补充。一般问题也可提交[文档反馈](https://github.com/leiw5173/docs_center/issues/new?template=document-feedback.yml)。
+4. **确认发布清单**：文档团队核对内容完整性、引用影响、语言状态、目录排序、预览及版本归档，确认检查通过后手动合并发布 PR。
+
+来源登记不等于发布。是否可以发布，以相应 PR 的检查结果和文档团队确认为准。
+
+## 维护约定
+
+- 中文与英文分别维护；英文缺失本身不阻断中文，跨语言引用需单独核对。
+- 有直接或间接引用关系的文档整体核对，避免分开更新造成断链。
+- 新修订更新现有候选 PR 后，需要重新检查与确认。
+- 小修也需文档团队确认；版本变更需核对旧版归档。
+- 地址变更需登记迁移关系，保留既有链接的可追溯性。
+- 测试数据与真实来源分开，待归类来源确认位置后再登记。
 
 ## 本地验证
 
@@ -30,28 +49,4 @@ node scripts/document-governance/run.cjs check \
   --output /tmp/document-preview/zh
 ```
 
-`demo` 只生成明确标记的合成预览，不登记真实来源。`check` 只读取固定 Git 对象、生成检查报告和静态预览，不调用后端或修改线上内容。预览下载解压后，从预览目录运行 `python3 -m http.server 8090 --bind 127.0.0.1`，浏览器打开本地地址。
-
-## 接入设置
-
-本仓库只配置：
-
-| 类型 | 名称 | 用途 |
-| --- | --- | --- |
-| Repository secret | `DOCUMENT_GOVERNANCE_TOKEN` | GitHub App/专用 token，写本仓库分支、PR，查询维护人员权限 |
-| Repository variable | `DOCUMENT_GOVERNANCE_MAINTAINERS` | 明确允许的文档维护人员登录名，逗号分隔；个人仓库可配置 `leiw5173` |
-| Repository variable | `DOCUMENT_GOVERNANCE_TEAM` / `DOCUMENT_GOVERNANCE_TEAM_ORG` | 可选组织团队，独立于本仓库 owner；与维护人员名单任选或并用 |
-| Environment `document-production` secret | `DOCUMENT_RELEASE_TOKEN` | 调用后端发布协议的专用凭据，不是数据库/OSS 凭据 |
-| Environment `document-production` variable | `DOCUMENT_PUBLISH_URL` | 后端 HTTPS 基地址 |
-| Environment `document-preview` secret | `DOCUMENT_PREVIEW_TOKEN` | 仅调用后端候选预览，无发布权限，必须与 release token 不同 |
-| Environment `document-preview` variable | `DOCUMENT_PREVIEW_URL` | 后端 HTTPS 基地址 |
-
-必须将 `document-release-preview` 设为默认分支必需检查（它依赖自动检查通过），要求分支保持最新、保护治理工作流变更，禁止机器人批准/自动合并。后端预览任务执行默认分支的受信代码，只按 PR 固定 head SHA 读取候选清单，不把预览凭据交给 PR 的代码。`document-preview` 允许本仓库 PR 使用；`document-production` 应限制为默认分支。GitHub App/专用 token 创建的 PR 会触发检查；不要改用会抑制后续工作流的默认 `GITHUB_TOKEN` 创建候选 PR。
-
-当前来源抓取支持公开 GitHub 仓库；私有业务源需要单独只读凭据和受信检查执行器，不能把写 token 注入不受信 PR 的检查代码。内部检查可见性由本仓库的访问权限决定，部署前应确认私有权限设置。
-
-## 两仓库协议与范围
-
-见 [流程设计](docs/document-maintenance-workflow.md)、[接口契约](docs/backend-contract.md) 和 [本地验证记录](docs/verification.md)。代码提交和推送不代表 GitHub Actions、真实预览和生产发布已经启用；生产部署尚未执行。
-
-第一版把所有已登记来源的同语言内容整体发布，保守覆盖直接与间接引用。跨语言引用会阻断并提示；英文缺失本身不阻断中文。自动检查辅助发现内容问题，完整性和版本归档仍由文档团队核对。
+`demo` 生成合成数据预览；`check` 根据候选清单检查固定来源修订，并输出报告和静态预览。预览可在本地解压查看。自动检查用于辅助发现问题，内容完整性与发布确认仍由文档团队负责。
