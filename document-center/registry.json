@@ -62,6 +62,22 @@
       ]
     },
     {
+      "id": "docs-courses",
+      "repository": "spacemit-com/docs-courses",
+      "branch": "main",
+      "prefix": "courses",
+      "rootDep": 3,
+      "column": "cases",
+      "parentNavigationId": "cases/cases-teaching-practice",
+      "navigationPath": [
+        "应用案例",
+        "教学与实践"
+      ],
+      "languages": [
+        "zh"
+      ]
+    },
+    {
       "id": "docs-ecosys",
       "repository": "spacemit-com/docs-ecosys",
       "branch": "main",

@@ -248,12 +248,12 @@
       "branch": "main",
       "prefix": "courses",
       "rootDep": 3,
-      "column": null,
+      "column": "cases",
       "languages": [
         "zh"
       ],
-      "status": "pending-placement",
-      "reason": "No placement in the current five-column navigation; retained as a discovered real source without assigning a release column.",
+      "status": "registered",
+      "reason": null,
       "url": "https://github.com/spacemit-com/docs-courses",
       "visibility": "public",
       "archived": false,
@@ -272,7 +272,13 @@
       "navigationColumns": {
         "zh": {},
         "en": {}
-      }
+      },
+      "parentNavigationId": "cases/cases-teaching-practice",
+      "navigationPath": [
+        "应用案例",
+        "教学与实践"
+      ],
+      "placementSource": "User-confirmed on 2026-11-16; placement is registered, not a live publication."
     },
     {
       "id": "docs-ecosys",
