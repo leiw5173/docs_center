@@ -1,4 +1,159 @@
 {
   "schemaVersion": 1,
-  "repositories": []
+  "repositories": [
+    {
+      "id": "docs-ai",
+      "repository": "spacemit-com/docs-ai",
+      "branch": "main",
+      "prefix": "ai",
+      "rootDep": 1,
+      "column": "ai",
+      "languages": [
+        "zh",
+        "en"
+      ]
+    },
+    {
+      "id": "docs-bianbu",
+      "repository": "spacemit-com/docs-bianbu",
+      "branch": "main",
+      "prefix": "software/SDK/bianbu",
+      "rootDep": 3,
+      "column": "os",
+      "languages": [
+        "zh",
+        "en"
+      ]
+    },
+    {
+      "id": "docs-buildroot",
+      "repository": "spacemit-com/docs-buildroot",
+      "branch": "main",
+      "prefix": "software/SDK/buildroot",
+      "rootDep": 3,
+      "column": "os",
+      "languages": [
+        "zh",
+        "en"
+      ]
+    },
+    {
+      "id": "docs-chip",
+      "repository": "spacemit-com/docs-chip",
+      "branch": "main",
+      "prefix": "hardware",
+      "rootDep": 3,
+      "column": "hardware",
+      "languages": [
+        "zh",
+        "en"
+      ]
+    },
+    {
+      "id": "docs-cloud",
+      "repository": "spacemit-com/docs-cloud",
+      "branch": "main",
+      "prefix": "cloud/userguide",
+      "rootDep": 2,
+      "column": "tools",
+      "languages": [
+        "zh",
+        "en"
+      ]
+    },
+    {
+      "id": "docs-ecosys",
+      "repository": "spacemit-com/docs-ecosys",
+      "branch": "main",
+      "prefix": "software/SDK/docs-ecosys",
+      "rootDep": 3,
+      "column": "os",
+      "languages": [
+        "zh",
+        "en"
+      ]
+    },
+    {
+      "id": "docs-events",
+      "repository": "spacemit-com/docs-events",
+      "branch": "main",
+      "prefix": "competition",
+      "rootDep": 3,
+      "column": "cases",
+      "languages": [
+        "zh"
+      ]
+    },
+    {
+      "id": "docs-openharmony",
+      "repository": "spacemit-com/docs-openharmony",
+      "branch": "main",
+      "prefix": "software/SDK/openharmony",
+      "rootDep": 3,
+      "column": "os",
+      "languages": [
+        "zh",
+        "en"
+      ]
+    },
+    {
+      "id": "docs-openwrt",
+      "repository": "spacemit-com/docs-openwrt",
+      "branch": "main",
+      "prefix": "software/SDK/openwrt",
+      "rootDep": 3,
+      "column": "os",
+      "languages": [
+        "zh",
+        "en"
+      ]
+    },
+    {
+      "id": "docs-product",
+      "repository": "spacemit-com/docs-product",
+      "branch": "main",
+      "prefix": "ecohardware",
+      "rootDep": 3,
+      "column": "hardware",
+      "languages": [
+        "zh",
+        "en"
+      ]
+    },
+    {
+      "id": "docs-ros",
+      "repository": "spacemit-com/docs-ros",
+      "branch": "main",
+      "prefix": "software/SDK/ros",
+      "rootDep": 3,
+      "column": "ai",
+      "languages": [
+        "zh",
+        "en"
+      ]
+    },
+    {
+      "id": "docs-service",
+      "repository": "spacemit-com/docs-service",
+      "branch": "main",
+      "prefix": "service/userguide",
+      "rootDep": 2,
+      "column": "hardware",
+      "languages": [
+        "zh"
+      ]
+    },
+    {
+      "id": "docs-tool",
+      "repository": "spacemit-com/docs-tool",
+      "branch": "main",
+      "prefix": "tools",
+      "rootDep": 2,
+      "column": "tools",
+      "languages": [
+        "zh",
+        "en"
+      ]
+    }
+  ]
 }

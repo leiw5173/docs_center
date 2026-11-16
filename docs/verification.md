@@ -13,6 +13,6 @@
 | 浏览器预览 | CI 合成预览及后端实际生成的合成 ZIP 均验证目录跳转、中文锚点、图片、刷新、返回和无 pageerror |
 | 官网接入 | `npm run build:dev -- --outDir /tmp/document-governance-site-dist`：类型检查及构建通过；输出到临时目录 |
 
-真实来源 registry 初始为空。后续需要配置 GitHub App/专用 token、文档维护人员、分支保护、预览与正式环境、后端 HTTPS 地址，并验证真实 PR、回报及外部同步。上线后页面探测、完整部署回滚和通知接口尚未接入；当前事务成功只证明本地目录/正文切换成功。
+上述初次实现验证时，真实来源 registry 为空；之后已按 [来源导入记录](source-import.md) 核实 14 个真实仓库并登记其中 13 个，课程来源保留待归类，登记结构校验通过。后续需要配置 GitHub App/专用 token、文档维护人员、分支保护、预览与正式环境、后端 HTTPS 地址，并验证真实 PR、回报及外部同步。上线后页面探测、完整部署回滚和通知接口尚未接入；当前事务成功只证明本地目录/正文切换成功。
 
 合成产物：`/tmp/document-governance-preview/index.html` 和 `/tmp/document-governance-backend-preview/site/index.html`。这些不是正式文档或生产预览。

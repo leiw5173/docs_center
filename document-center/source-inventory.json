@@ -1,0 +1,632 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-11-16T09:56:32Z",
+  "configSnapshotDate": "2026-11-12",
+  "configProvenance": "Prototype public source metadata imported into the new local backend; not a production database export.",
+  "verification": "Live GitHub repository metadata, default branch and language directory Git trees; Markdown counts include index.md.",
+  "repositories": [
+    {
+      "id": "docs-ai",
+      "repository": "spacemit-com/docs-ai",
+      "branch": "main",
+      "prefix": "ai",
+      "rootDep": 1,
+      "column": "ai",
+      "languages": [
+        "zh",
+        "en"
+      ],
+      "status": "registered",
+      "reason": null,
+      "url": "https://github.com/spacemit-com/docs-ai",
+      "visibility": "public",
+      "archived": false,
+      "languageEvidence": [
+        {
+          "language": "zh",
+          "treeSha": "b8f8e078794876622006bd047e6406643a3ffd1a",
+          "markdownFiles": 46,
+          "hasRootIndex": true,
+          "sample": [
+            "application_tools/ai-sdk.md",
+            "application_tools/index.md"
+          ]
+        },
+        {
+          "language": "en",
+          "treeSha": "91ee07488274bddd9acaf15e96839fa673c5b6ea",
+          "markdownFiles": 46,
+          "hasRootIndex": true,
+          "sample": [
+            "application_tools/ai-sdk.md",
+            "application_tools/index.md"
+          ]
+        }
+      ],
+      "navigationColumns": {
+        "zh": {
+          "ai": 28,
+          "cases": 16
+        },
+        "en": {
+          "ai": 28,
+          "cases": 16
+        }
+      }
+    },
+    {
+      "id": "docs-bianbu",
+      "repository": "spacemit-com/docs-bianbu",
+      "branch": "main",
+      "prefix": "software/SDK/bianbu",
+      "rootDep": 3,
+      "column": "os",
+      "languages": [
+        "zh",
+        "en"
+      ],
+      "status": "registered",
+      "reason": null,
+      "url": "https://github.com/spacemit-com/docs-bianbu",
+      "visibility": "public",
+      "archived": false,
+      "languageEvidence": [
+        {
+          "language": "zh",
+          "treeSha": "e3bcaa49f42c42e25f57b69a45b3c6d9e51b6c52",
+          "markdownFiles": 52,
+          "hasRootIndex": true,
+          "sample": [
+            "development/amd.md",
+            "development/coredump.md"
+          ]
+        },
+        {
+          "language": "en",
+          "treeSha": "bec24d3470a82f9fd69fb19cc0765b4b9ff36e20",
+          "markdownFiles": 52,
+          "hasRootIndex": true,
+          "sample": [
+            "development/amd.md",
+            "development/coredump.md"
+          ]
+        }
+      ],
+      "navigationColumns": {
+        "zh": {
+          "os": 52
+        },
+        "en": {
+          "os": 52
+        }
+      }
+    },
+    {
+      "id": "docs-buildroot",
+      "repository": "spacemit-com/docs-buildroot",
+      "branch": "main",
+      "prefix": "software/SDK/buildroot",
+      "rootDep": 3,
+      "column": "os",
+      "languages": [
+        "zh",
+        "en"
+      ],
+      "status": "registered",
+      "reason": null,
+      "url": "https://github.com/spacemit-com/docs-buildroot",
+      "visibility": "public",
+      "archived": false,
+      "languageEvidence": [
+        {
+          "language": "zh",
+          "treeSha": "4c639fd20284efd38fdc6c59810004a18c7cfd1f",
+          "markdownFiles": 174,
+          "hasRootIndex": true,
+          "sample": [
+            "index.md",
+            "k1_buildroot/camera/camera_development_guide.md"
+          ]
+        },
+        {
+          "language": "en",
+          "treeSha": "5e2d509e3cd7e32b1f35be311bde4a33eccfeb8e",
+          "markdownFiles": 174,
+          "hasRootIndex": true,
+          "sample": [
+            "index.md",
+            "k1_buildroot/camera/camera_development_guide.md"
+          ]
+        }
+      ],
+      "navigationColumns": {
+        "zh": {
+          "os": 171
+        },
+        "en": {
+          "os": 159
+        }
+      }
+    },
+    {
+      "id": "docs-chip",
+      "repository": "spacemit-com/docs-chip",
+      "branch": "main",
+      "prefix": "hardware",
+      "rootDep": 3,
+      "column": "hardware",
+      "languages": [
+        "zh",
+        "en"
+      ],
+      "status": "registered",
+      "reason": null,
+      "url": "https://github.com/spacemit-com/docs-chip",
+      "visibility": "public",
+      "archived": false,
+      "languageEvidence": [
+        {
+          "language": "zh",
+          "treeSha": "efb46b54070630ec4b68121e5c8a1269dd42829f",
+          "markdownFiles": 44,
+          "hasRootIndex": true,
+          "sample": [
+            "index.md",
+            "key_stone/index.md"
+          ]
+        },
+        {
+          "language": "en",
+          "treeSha": "ef096a44dfa71bd5ba37b45d884a84cb12b27501",
+          "markdownFiles": 99,
+          "hasRootIndex": true,
+          "sample": [
+            "index.md",
+            "key_stone/index.md"
+          ]
+        }
+      ],
+      "navigationColumns": {
+        "zh": {
+          "hardware": 84
+        },
+        "en": {
+          "hardware": 84
+        }
+      }
+    },
+    {
+      "id": "docs-cloud",
+      "repository": "spacemit-com/docs-cloud",
+      "branch": "main",
+      "prefix": "cloud/userguide",
+      "rootDep": 2,
+      "column": "tools",
+      "languages": [
+        "zh",
+        "en"
+      ],
+      "status": "registered",
+      "reason": null,
+      "url": "https://github.com/spacemit-com/docs-cloud",
+      "visibility": "public",
+      "archived": false,
+      "languageEvidence": [
+        {
+          "language": "zh",
+          "treeSha": "d1f8d8c51d309857e08143ff8b9bad55cb20abc5",
+          "markdownFiles": 2,
+          "hasRootIndex": true,
+          "sample": [
+            "cloud_user_guide.md",
+            "index.md"
+          ]
+        },
+        {
+          "language": "en",
+          "treeSha": "4ee7c35241fc048df28ead434eda5caa1b7b5b4a",
+          "markdownFiles": 2,
+          "hasRootIndex": true,
+          "sample": [
+            "cloud_user_guide.md",
+            "index.md"
+          ]
+        }
+      ],
+      "navigationColumns": {
+        "zh": {
+          "tools": 2
+        },
+        "en": {
+          "tools": 2
+        }
+      }
+    },
+    {
+      "id": "docs-courses",
+      "repository": "spacemit-com/docs-courses",
+      "branch": "main",
+      "prefix": "courses",
+      "rootDep": 3,
+      "column": null,
+      "languages": [
+        "zh"
+      ],
+      "status": "pending-placement",
+      "reason": "No placement in the current five-column navigation; retained as a discovered real source without assigning a release column.",
+      "url": "https://github.com/spacemit-com/docs-courses",
+      "visibility": "public",
+      "archived": false,
+      "languageEvidence": [
+        {
+          "language": "zh",
+          "treeSha": "3b30deb99b1f122125f60c3488e19f91f3e34bfd",
+          "markdownFiles": 93,
+          "hasRootIndex": true,
+          "sample": [
+            "AI/01_AI基础学习及实践/01_Python环境搭建.md",
+            "AI/01_AI基础学习及实践/02_C++环境搭建.md"
+          ]
+        }
+      ],
+      "navigationColumns": {
+        "zh": {},
+        "en": {}
+      }
+    },
+    {
+      "id": "docs-ecosys",
+      "repository": "spacemit-com/docs-ecosys",
+      "branch": "main",
+      "prefix": "software/SDK/docs-ecosys",
+      "rootDep": 3,
+      "column": "os",
+      "languages": [
+        "zh",
+        "en"
+      ],
+      "status": "registered",
+      "reason": null,
+      "url": "https://github.com/spacemit-com/docs-ecosys",
+      "visibility": "public",
+      "archived": false,
+      "languageEvidence": [
+        {
+          "language": "zh",
+          "treeSha": "3c6a3cc28ff7203186be3f4ba7fa98e6be9f8d03",
+          "markdownFiles": 8,
+          "hasRootIndex": true,
+          "sample": [
+            "index.md",
+            "openeuler/1_openeuler_flashing.md"
+          ]
+        },
+        {
+          "language": "en",
+          "treeSha": "7af21248205effcdd894ef75e09e187a6934b051",
+          "markdownFiles": 2,
+          "hasRootIndex": true,
+          "sample": [
+            "index.md",
+            "root_overview.md"
+          ]
+        }
+      ],
+      "navigationColumns": {
+        "zh": {
+          "os": 7
+        },
+        "en": {
+          "os": 1
+        }
+      }
+    },
+    {
+      "id": "docs-events",
+      "repository": "spacemit-com/docs-events",
+      "branch": "main",
+      "prefix": "competition",
+      "rootDep": 3,
+      "column": "cases",
+      "languages": [
+        "zh"
+      ],
+      "status": "registered",
+      "reason": null,
+      "url": "https://github.com/spacemit-com/docs-events",
+      "visibility": "public",
+      "archived": false,
+      "languageEvidence": [
+        {
+          "language": "zh",
+          "treeSha": "f7702725370cd9c22904a7ccf6b11305468a0103",
+          "markdownFiles": 24,
+          "hasRootIndex": true,
+          "sample": [
+            "index.md",
+            "竞赛教程/01_Bianbu_使用文档及案例集/01_Muse_Pi_Pro教学资料.md"
+          ]
+        }
+      ],
+      "navigationColumns": {
+        "zh": {
+          "cases": 22
+        },
+        "en": {}
+      }
+    },
+    {
+      "id": "docs-openharmony",
+      "repository": "spacemit-com/docs-openharmony",
+      "branch": "main",
+      "prefix": "software/SDK/openharmony",
+      "rootDep": 3,
+      "column": "os",
+      "languages": [
+        "zh",
+        "en"
+      ],
+      "status": "registered",
+      "reason": null,
+      "url": "https://github.com/spacemit-com/docs-openharmony",
+      "visibility": "public",
+      "archived": false,
+      "languageEvidence": [
+        {
+          "language": "zh",
+          "treeSha": "532b84ee1baecb539e184a2c09d55f547790ca59",
+          "markdownFiles": 48,
+          "hasRootIndex": true,
+          "sample": [
+            "index.md",
+            "k1_oh5.0/10_K1_OH5.0_third_party.md"
+          ]
+        },
+        {
+          "language": "en",
+          "treeSha": "584998514fef05cec9adc453ef6e05e9f70c1fa7",
+          "markdownFiles": 2,
+          "hasRootIndex": true,
+          "sample": [
+            "index.md",
+            "root_overview.md"
+          ]
+        }
+      ],
+      "navigationColumns": {
+        "zh": {
+          "os": 44
+        },
+        "en": {
+          "os": 1
+        }
+      }
+    },
+    {
+      "id": "docs-openwrt",
+      "repository": "spacemit-com/docs-openwrt",
+      "branch": "main",
+      "prefix": "software/SDK/openwrt",
+      "rootDep": 3,
+      "column": "os",
+      "languages": [
+        "zh",
+        "en"
+      ],
+      "status": "registered",
+      "reason": null,
+      "url": "https://github.com/spacemit-com/docs-openwrt",
+      "visibility": "public",
+      "archived": false,
+      "languageEvidence": [
+        {
+          "language": "zh",
+          "treeSha": "ceceeedec5ea2d23401c01282f308bab0659019b",
+          "markdownFiles": 6,
+          "hasRootIndex": true,
+          "sample": [
+            "index.md",
+            "openwrt_device_management.md"
+          ]
+        },
+        {
+          "language": "en",
+          "treeSha": "afc8063a736e31157840c8befbc2e01597a0fc8e",
+          "markdownFiles": 6,
+          "hasRootIndex": true,
+          "sample": [
+            "index.md",
+            "openwrt_device_management.md"
+          ]
+        }
+      ],
+      "navigationColumns": {
+        "zh": {
+          "os": 5
+        },
+        "en": {
+          "os": 5
+        }
+      }
+    },
+    {
+      "id": "docs-product",
+      "repository": "spacemit-com/docs-product",
+      "branch": "main",
+      "prefix": "ecohardware",
+      "rootDep": 3,
+      "column": "hardware",
+      "languages": [
+        "zh",
+        "en"
+      ],
+      "status": "registered",
+      "reason": null,
+      "url": "https://github.com/spacemit-com/docs-product",
+      "visibility": "public",
+      "archived": false,
+      "languageEvidence": [
+        {
+          "language": "zh",
+          "treeSha": "777dfed9b4b188d8ca07bce796f96823aa01e0d9",
+          "markdownFiles": 57,
+          "hasRootIndex": true,
+          "sample": [
+            "hw_accessories/index.md",
+            "hw_accessories/tf_card_debug_board.md"
+          ]
+        },
+        {
+          "language": "en",
+          "treeSha": "bc97510b20f85ce4788257eb2836215feedbeaab",
+          "markdownFiles": 57,
+          "hasRootIndex": true,
+          "sample": [
+            "hw_accessories/index.md",
+            "hw_accessories/tf_card_debug_board.md"
+          ]
+        }
+      ],
+      "navigationColumns": {
+        "zh": {
+          "hardware": 37
+        },
+        "en": {
+          "hardware": 37
+        }
+      }
+    },
+    {
+      "id": "docs-ros",
+      "repository": "spacemit-com/docs-ros",
+      "branch": "main",
+      "prefix": "software/SDK/ros",
+      "rootDep": 3,
+      "column": "ai",
+      "languages": [
+        "zh",
+        "en"
+      ],
+      "status": "registered",
+      "reason": null,
+      "url": "https://github.com/spacemit-com/docs-ros",
+      "visibility": "public",
+      "archived": false,
+      "languageEvidence": [
+        {
+          "language": "zh",
+          "treeSha": "73fad1a9530a89eae2d7cdba0d22245e1eba543b",
+          "markdownFiles": 260,
+          "hasRootIndex": true,
+          "sample": [
+            "index.md",
+            "k1/01_Quick_start/1.1_Hardware_Overview/1.1.1_MUSE_Pi_Pro.md"
+          ]
+        },
+        {
+          "language": "en",
+          "treeSha": "2cdf360e28334802aa310fdec57428e68e243c1e",
+          "markdownFiles": 260,
+          "hasRootIndex": true,
+          "sample": [
+            "index.md",
+            "k1/01_Quick_start/1.1_Hardware_Overview/1.1.1_MUSE_Pi_Pro.md"
+          ]
+        }
+      ],
+      "navigationColumns": {
+        "zh": {
+          "ai": 259,
+          "cases": 20
+        },
+        "en": {
+          "ai": 258,
+          "cases": 20
+        }
+      }
+    },
+    {
+      "id": "docs-service",
+      "repository": "spacemit-com/docs-service",
+      "branch": "main",
+      "prefix": "service/userguide",
+      "rootDep": 2,
+      "column": "hardware",
+      "languages": [
+        "zh"
+      ],
+      "status": "registered",
+      "reason": null,
+      "url": "https://github.com/spacemit-com/docs-service",
+      "visibility": "public",
+      "archived": false,
+      "languageEvidence": [
+        {
+          "language": "zh",
+          "treeSha": "a7687f2adcca2bc99dcfab1277c1683ea063afa4",
+          "markdownFiles": 2,
+          "hasRootIndex": true,
+          "sample": [
+            "index.md",
+            "partner_project_hub.md"
+          ]
+        }
+      ],
+      "navigationColumns": {
+        "zh": {
+          "hardware": 1
+        },
+        "en": {}
+      }
+    },
+    {
+      "id": "docs-tool",
+      "repository": "spacemit-com/docs-tool",
+      "branch": "main",
+      "prefix": "tools",
+      "rootDep": 2,
+      "column": "tools",
+      "languages": [
+        "zh",
+        "en"
+      ],
+      "status": "registered",
+      "reason": null,
+      "url": "https://github.com/spacemit-com/docs-tool",
+      "visibility": "public",
+      "archived": false,
+      "languageEvidence": [
+        {
+          "language": "zh",
+          "treeSha": "a98c4f01b1523e57bbd3067030a409620876b14f",
+          "markdownFiles": 22,
+          "hasRootIndex": true,
+          "sample": [
+            "index.md",
+            "studio/faq.md"
+          ]
+        },
+        {
+          "language": "en",
+          "treeSha": "0c6344b111da693428b37ecb4d0dc58d106ecd73",
+          "markdownFiles": 22,
+          "hasRootIndex": true,
+          "sample": [
+            "index.md",
+            "studio/faq.md"
+          ]
+        }
+      ],
+      "navigationColumns": {
+        "zh": {
+          "os": 1,
+          "tools": 20
+        },
+        "en": {
+          "os": 1,
+          "tools": 20
+        }
+      }
+    }
+  ]
+}
