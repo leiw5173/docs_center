@@ -1,0 +1,17 @@
+{
+  "name": "spacemit-document-governance",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test tests/document-governance/*.test.cjs",
+    "check": "node scripts/document-governance/run.cjs check",
+    "demo": "node scripts/document-governance/demo.cjs"
+  },
+  "dependencies": {
+    "markdown-it": "^14.3.3",
+    "js-yaml": "^4.3.2"
+  }
+}

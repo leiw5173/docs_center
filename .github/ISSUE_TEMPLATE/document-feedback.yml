@@ -1,0 +1,18 @@
+name: 文档反馈与治理调整
+description: 由文档团队协调正文修正、地址迁移、标签与版本归档
+title: '[文档反馈] '
+body:
+  - type: input
+    id: document
+    attributes: {label: 文档或发布 PR, description: 填写文档地址或发布 PR 链接}
+    validations: {required: true}
+  - type: dropdown
+    id: kind
+    attributes:
+      label: 问题类型
+      options: [正文或资源错误, 目录链接错误, 地址迁移映射, 标签调整, 版本归档, 其他]
+    validations: {required: true}
+  - type: textarea
+    id: details
+    attributes: {label: 问题与期望结果}
+    validations: {required: true}

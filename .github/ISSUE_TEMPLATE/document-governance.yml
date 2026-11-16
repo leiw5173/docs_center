@@ -1,0 +1,25 @@
+name: 补充发布 PR 的治理信息
+description: 文档团队填写表单，自动更新待发布 PR 并重跑检查
+title: '[文档治理] '
+body:
+  - type: dropdown
+    id: language
+    attributes: {label: 发布语言, options: [zh, en]}
+    validations: {required: true}
+  - type: dropdown
+    id: operation
+    attributes:
+      label: 调整类型
+      options: [地址迁移, 标签调整, 引用登记, 文档反馈]
+    validations: {required: true}
+  - type: input
+    id: target
+    attributes: {label: 文档标识, description: 发布清单中的 登记ID/语言/文件路径；地址迁移填写旧标识}
+    validations: {required: true}
+  - type: input
+    id: url
+    attributes: {label: 引用原地址, description: 仅引用登记填写正文中的原始链接}
+  - type: textarea
+    id: content
+    attributes: {label: 调整内容, description: 地址迁移或引用登记填写目标文档标识；标签用逗号分隔；反馈填写说明}
+    validations: {required: true}

@@ -1,0 +1,37 @@
+name: 文档仓库接入或调整
+description: 填写表单，自动生成来源登记 PR，无需修改配置文件
+title: '[文档接入] '
+body:
+  - type: input
+    id: id
+    attributes: {label: 登记 ID, description: 与后端注册 ID 一致，修改已有来源时填写原 ID}
+    validations: {required: true}
+  - type: input
+    id: repository
+    attributes: {label: 来源仓库, description: GitHub owner/repository}
+    validations: {required: true}
+  - type: input
+    id: branch
+    attributes: {label: 分支, value: main}
+    validations: {required: true}
+  - type: dropdown
+    id: languages
+    attributes:
+      label: 语言
+      multiple: true
+      options: [zh, en]
+    validations: {required: true}
+  - type: dropdown
+    id: column
+    attributes:
+      label: 目标栏目
+      options: [hardware, os, ai, cases, tools]
+    validations: {required: true}
+  - type: input
+    id: prefix
+    attributes: {label: 目标路径前缀, description: 与后端登记一致，例如 software/SDK/example}
+    validations: {required: true}
+  - type: input
+    id: rootDep
+    attributes: {label: 目录层级 rootDep, description: 与后端登记一致，填写正整数}
+    validations: {required: true}
