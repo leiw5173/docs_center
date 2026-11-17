@@ -57,7 +57,10 @@
     }
   ],
   "references": {},
-  "redirects": {},
+  "redirects": {
+    "maintenance-test/zh/guide/index.md": "maintenance-test/zh/maintenance-guide/index.md",
+    "maintenance-test/zh/guide/steps.md": "maintenance-test/zh/maintenance-guide/steps.md"
+  },
   "labels": {},
   "feedback": [],
   "reviewRequired": [
