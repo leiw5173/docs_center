@@ -27,7 +27,10 @@ function validateRegistry(registry) {
     if (!Array.isArray(r.languages) || !r.languages.length || r.languages.some(l=>!['zh','en'].includes(l)) || new Set(r.languages).size!==r.languages.length) throw Error('Invalid registered languages');
     if (!['hardware','os','ai','cases','tools'].includes(r.column) || !r.branch || !Number.isInteger(r.rootDep) || r.rootDep<1) throw Error('Missing column, branch or rootDep');
     if(!/^[A-Za-z0-9][A-Za-z0-9_./-]*$/.test(r.branch)||r.branch.includes('..')||r.branch.includes('//')||r.branch.endsWith('/'))throw Error('Invalid source branch');
+    if(r.parentNavigationId!==undefined && (typeof r.parentNavigationId!=='string'||!r.parentNavigationId||r.parentNavigationId.length>256||!/^[\w/-]+$/.test(r.parentNavigationId)||r.parentNavigationId.split('/').some(p=>!p||p==='..')))throw Error('Invalid target category ID');
+    if(r.navigationPath!==undefined && (!Array.isArray(r.navigationPath)||!r.navigationPath.length||r.navigationPath.length>12||r.navigationPath.some(p=>typeof p!=='string'||!p.trim()||p.length>100||/[\x00-\x1f]/.test(p))))throw Error('Invalid target category path');
   }
+  if(registry.change && !ids.has(registry.change.repositoryId))throw Error('Registration change must identify a registered repository');
 }
 function snapshot(root, revision) {
   if (!/^[a-f0-9]{40}$/.test(revision || '')) throw Error('A full immutable commit SHA is required');
@@ -111,7 +114,7 @@ function build({registry,roots,revisions,language,previous=null,overrides={}}) {
       const doc={path:file,sha256:sha(source.get(file).read()),title:a.data.title||h1[0]?.title||path.posix.basename(file),sidebarPosition:a.data.sidebar_position??null,softwareVersion:a.data.software_version??null,references:[...new Set(references)].sort()};
       docs.push(doc);pages.set(`${r.id}/${file}`,{...a,source,repo:r,revision,file});
     }
-    scopes.push({repoId:r.id,repository:r.repository,prefix:r.prefix,rootDep:r.rootDep,column:r.column,language,commit:revision,documents:docs,assets:[...assets.values()].sort((a,b)=>a.path.localeCompare(b.path))});
+    scopes.push({repoId:r.id,repository:r.repository,prefix:r.prefix,rootDep:r.rootDep,column:r.column,...(r.parentNavigationId?{parentNavigationId:r.parentNavigationId}:{}),...(r.navigationPath?{navigationPath:r.navigationPath}:{}),language,commit:revision,documents:docs,assets:[...assets.values()].sort((a,b)=>a.path.localeCompare(b.path))});
   }
   if(!scopes.length)throw Error('No repositories registered for selected language');
   const oldDocs=new Map((previous?.scopes||[]).flatMap(s=>s.documents.map(d=>[`${s.repoId}/${d.path}`,d])));

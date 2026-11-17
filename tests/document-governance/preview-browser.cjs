@@ -13,6 +13,7 @@ const backend=process.argv[3]==='backend';
   try {
     const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
+    if(backend)await page.getByText('应用案例 → 教学与实践',{exact:true}).waitFor();
     await page.getByRole('link',{name:backend?'合成目录':'synthetic/zh/index.md',exact:true}).click();
     await page.getByRole('link',{name:backend?'指南':'开发指南',exact:true}).click();
     assert.match(decodeURIComponent(page.url()),/guide\.md\.html#安装$/);

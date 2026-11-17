@@ -10,15 +10,12 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: document-governance-${{ github.event_name == 'repository_dispatch' && 'candidates' || github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  group: document-governance-${{ github.event.client_payload.repository || github.event.issue.number || github.event.pull_request.number || github.run_id }}
   cancel-in-progress: false
 jobs:
   registration:
     if: github.event_name == 'issues' && startsWith(github.event.issue.title, '[文档接入]')
     runs-on: ubuntu-latest
-    concurrency:
-      group: document-registration
-      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
         with:
@@ -79,18 +76,15 @@ jobs:
       - run: node --test tests/document-governance/*.test.cjs
       - name: Validate registration
         if: startsWith(github.head_ref, 'document-registration/')
-        run: node scripts/document-governance/run.cjs validate-registry
+        run: node scripts/document-governance/run.cjs check-registration
       - name: Check immutable manifests and build previews
         if: startsWith(github.head_ref, 'document-release/')
         shell: bash
         run: |
           set -euo pipefail
-          for language in zh en; do
-            if [[ "$RELEASE_BRANCH" == document-release/* && "$RELEASE_BRANCH" != "document-release/$language" ]]; then continue; fi
-            manifest="document-center/releases/$language.json"
-            if [ ! -f "$manifest" ]; then echo 'Release manifest is missing'; exit 1; fi
-            node scripts/document-governance/run.cjs check --manifest "$manifest" --output "$RUNNER_TEMP/document-preview/$language"
-          done
+          manifest=$(node -e 'process.stdout.write(require("./scripts/document-governance/groups.cjs").parseReleaseBranch(process.env.RELEASE_BRANCH).file)')
+          if [ ! -f "$manifest" ]; then echo 'Release manifest is missing'; exit 1; fi
+          node scripts/document-governance/run.cjs check --manifest "$manifest" --output "$RUNNER_TEMP/document-preview"
         env:
           RELEASE_BRANCH: ${{ github.head_ref }}
       - uses: actions/upload-artifact@v4
@@ -133,9 +127,6 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged && (startsWith(github.event.pull_request.head.ref, 'document-release/') || startsWith(github.event.pull_request.head.ref, 'document-registration/'))
     runs-on: ubuntu-latest
     environment: document-production
-    concurrency:
-      group: document-production
-      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
         with:
@@ -148,3 +139,23 @@ jobs:
         env:
           DOCUMENT_PUBLISH_URL: ${{ vars.DOCUMENT_PUBLISH_URL }}
           DOCUMENT_RELEASE_TOKEN: ${{ secrets.DOCUMENT_RELEASE_TOKEN }}
+  report:
+    needs: [preview, backend-preview, publish]
+    if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && (startsWith(github.event.pull_request.head.ref, 'document-release/') || startsWith(github.event.pull_request.head.ref, 'document-registration/'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+      - run: node scripts/document-governance/run.cjs report-stage
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DOCUMENT_JOB_RESULTS: ${{ toJSON(needs) }}

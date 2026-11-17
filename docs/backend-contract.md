@@ -43,12 +43,16 @@ X-Document-Release-Token: 同上
 {governanceRepository, governanceCommit, pullRequest, manifest}
 ```
 
-`manifest` 含语言、各来源固定提交、正文/资源 SHA-256、引用、迁移映射、标签、反馈和人工核对项。后端验证 PR 与清单来源，并重新读取固定正文和资源、逐项比对哈希。
+`manifest` 含 `groupId`、`groupRepositories`、语言、目录子类和各来源固定提交、正文/资源 SHA-256、引用、迁移映射、标签、反馈和人工核对项。后端验证 PR 与清单来源，并重新读取固定正文和资源、逐项比对哈希。
 
-所有来源在同一事务切换。任一来源失败则整批不生效；相同清单重复调用返回 `ALREADY_PUBLISHED`，旧合并事件不得覆盖新版本。成功返回 `PUBLISHED` 和 `releaseId`，此处仅表示本地目录/正文发布事务完成，外部 OSS/CDN/RAGFlow 同步仍沿用后端耐久队列，不能将其当成全部外部部署已验收。
+所有来源在同一事务切换。任一来源失败则整批不生效；相同清单重复调用返回 `ALREADY_PUBLISHED`，旧合并事件不得覆盖新版本。受理后返回 `PUBLISHING` 或 `CATALOG_PUBLISHED` 及 `releaseId`。`GET /admin/documents/releases/{releaseId}` 查询持久结果，仍使用发布凭据；最终状态为 `PUBLISHING`、`SUCCEEDED`、`FAILED` 或 `SUPERSEDED`。仅本地模式会明确说明未启用外部同步。最终回报等待本组已配置同步全部完成，再以幂等评论回写原 PR；发送失败持久重试，不能把受理或单个来源成功当成整组成功。
 
 地址迁移和标签随发布事务写入；官网可通过 `GET /document/resolve?language=zh&sourcePath=...` 查询目标路径和标签。不可见正文不通过别名暴露；历史 `release` 链接保持固定。
 
 ## 上线检查与回滚边界
 
 本实现保证候选隔离、固定 SHA/哈希检查和数据库事务回滚。流程中的上线后检查（页面打不开、正文渲染失败、线上清单不一致）、上一完整版本部署回滚与通知，需要部署执行方提供探测和恢复接口后继续接入。目前不把这些未接入能力标为发布验收通过。
+
+新增关联组清单位于 `document-center/releases/<language>/<groupId>.json`，分支为 `document-release/<language>/<groupId>`。旧版单语言清单仍可读取。组内来源原子切换，独立组只更新各自来源的版本、标签和修订记录，不覆盖其他组。
+
+登记 PR 使用 `registry.change.repositoryId` 指明本次接入/调整项；仅对该项注册、生成首轮通知，已有来源不随一次新接入而批量重发。分类可按现有节点 ID 或完整名称路径定位，非法目标不允许部分生效。

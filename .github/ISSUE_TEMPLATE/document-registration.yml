@@ -4,7 +4,7 @@ title: '[文档接入] '
 body:
   - type: input
     id: id
-    attributes: {label: 登记 ID, description: 与后端注册 ID 一致，修改已有来源时填写原 ID}
+    attributes: {label: 登记 ID, description: 稳定的来源标识，例如 maintenance-test；修改已有来源时填写原 ID}
     validations: {required: true}
   - type: input
     id: repository
@@ -28,10 +28,16 @@ body:
       options: [hardware, os, ai, cases, tools]
     validations: {required: true}
   - type: input
+    id: categoryId
+    attributes: {label: 子类节点 ID, description: 可选，选择已有子类时填写，例如 cases/cases-teaching-practice}
+  - type: input
+    id: categoryPath
+    attributes: {label: 分类路径, description: 可选，例如 应用案例 / 教学与实践；保持与选定子类一致}
+  - type: input
     id: prefix
-    attributes: {label: 目标路径前缀, description: 与后端登记一致，例如 software/SDK/example}
+    attributes: {label: 目标路径前缀, description: 独立来源前缀，例如 maintenance-test；修改已有来源时保留原值}
     validations: {required: true}
   - type: input
     id: rootDep
-    attributes: {label: 目录层级 rootDep, description: 与后端登记一致，填写正整数}
+    attributes: {label: 目录层级 rootDep, description: 填写正整数，例如 1；修改已有来源时保持原有层级}
     validations: {required: true}

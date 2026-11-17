@@ -12,7 +12,7 @@
 
 ## 查看真实来源
 
-当前已核实并登记 14 个真实来源仓库。课程仓库 `docs-courses` 归入“应用案例 → 教学与实践”。
+首批已核实并登记 14 个真实来源仓库。课程仓库 `docs-courses` 归入“应用案例 → 教学与实践”；后续接入情况以来源登记为准。
 
 - [来源仓库与正文入口](docs/source-import.md)
 - [来源登记](document-center/registry.json)
@@ -26,6 +26,10 @@
 4. **确认发布清单**：文档团队核对内容完整性、引用影响、语言状态、目录排序、预览及版本归档，确认检查通过后手动合并发布 PR。
 
 来源登记不等于发布。是否可以发布，以相应 PR 的检查结果和文档团队确认为准。
+
+目录子类随登记和候选清单维护。发布以仓库为最小单位，按直接、间接文档引用组成关联组；同组复用待发布 PR，不同组独立审核。检查状态和最终发布结果回写到相应 PR，任务受理不等于发布完成。
+
+新仓库接入后，按 [新仓库注册与业务 PR 合并两类测试](docs/maintenance-acceptance.md) 验收；可使用 [测试文档样例](examples/business-repository) 准备内容。
 
 ## 维护约定
 
@@ -44,9 +48,6 @@
 npm ci --ignore-scripts
 npm test
 npm run demo -- /tmp/document-governance-preview
-node scripts/document-governance/run.cjs check \
-  --manifest document-center/releases/zh.json \
-  --output /tmp/document-preview/zh
 ```
 
-`demo` 生成合成数据预览；`check` 根据候选清单检查固定来源修订，并输出报告和静态预览。预览可在本地解压查看。自动检查用于辅助发现问题，内容完整性与发布确认仍由文档团队负责。
+`demo` 生成合成数据预览；`check` 可按候选清单路径检查固定来源修订，并输出报告和静态预览。关联组清单位于 `document-center/releases/<语言>/<关联组 ID>.json`。预览可在本地解压查看。自动检查用于辅助发现问题，内容完整性与发布确认仍由文档团队负责。
