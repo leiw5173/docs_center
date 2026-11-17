@@ -14,7 +14,7 @@
         "教学与实践"
       ],
       "language": "zh",
-      "commit": "e9058ead7197dc3fc5ec73396f44b0e67cd82b9c",
+      "commit": "83b31af2c2273ed030acda990c30293048875206",
       "documents": [
         {
           "path": "zh/guide/index.md",
@@ -68,26 +68,7 @@
     "directory-order",
     "address-migration"
   ],
-  "warnings": [
-    {
-      "repo": "maintenance-test",
-      "file": "zh/guide/index.md",
-      "code": "translation",
-      "message": "Other language counterpart is missing; release remains independent"
-    },
-    {
-      "repo": "maintenance-test",
-      "file": "zh/guide/steps.md",
-      "code": "translation",
-      "message": "Other language counterpart is missing; release remains independent"
-    },
-    {
-      "repo": "maintenance-test",
-      "file": "zh/index.md",
-      "code": "translation",
-      "message": "Other language counterpart is missing; release remains independent"
-    }
-  ],
+  "warnings": [],
   "groupId": "g-f3ab12cbbdd16d6d6ea6",
   "groupRepositories": [
     "maintenance-test"
