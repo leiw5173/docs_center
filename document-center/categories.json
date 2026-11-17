@@ -1,0 +1,185 @@
+{
+  "schemaVersion": 1,
+  "verifiedOn": "2026-11-17",
+  "categories": [
+    {
+      "id": "hardware",
+      "column": "hardware",
+      "path": [
+        "硬件"
+      ]
+    },
+    {
+      "id": "hardware/hardware-5dcfdf80b583fa3f",
+      "column": "hardware",
+      "path": [
+        "硬件",
+        "芯片"
+      ]
+    },
+    {
+      "id": "hardware/hardware-7e1f3854607bec1f",
+      "column": "hardware",
+      "path": [
+        "硬件",
+        "板卡与整机"
+      ]
+    },
+    {
+      "id": "hardware/hardware-dbbe5bbf851d8f07",
+      "column": "hardware",
+      "path": [
+        "硬件",
+        "支持与服务"
+      ]
+    },
+    {
+      "id": "os",
+      "column": "os",
+      "path": [
+        "操作系统"
+      ]
+    },
+    {
+      "id": "os/os-27e42591c00b5520",
+      "column": "os",
+      "path": [
+        "操作系统",
+        "Bianbu"
+      ]
+    },
+    {
+      "id": "os/os-67f32b0ec33df526",
+      "column": "os",
+      "path": [
+        "操作系统",
+        "OpenWrt"
+      ]
+    },
+    {
+      "id": "os/os-f4b5b1e54b76e98d",
+      "column": "os",
+      "path": [
+        "操作系统",
+        "Buildroot"
+      ]
+    },
+    {
+      "id": "os/os-8aa903fa0d71df65",
+      "column": "os",
+      "path": [
+        "操作系统",
+        "OpenHarmony"
+      ]
+    },
+    {
+      "id": "os/os-caddd22b1aaa7c4a",
+      "column": "os",
+      "path": [
+        "操作系统",
+        "其他生态系统"
+      ]
+    },
+    {
+      "id": "os/csv-717ffbdfa8cf697ff011",
+      "column": "os",
+      "path": [
+        "操作系统",
+        "镜像安装"
+      ]
+    },
+    {
+      "id": "ai",
+      "column": "ai",
+      "path": [
+        "AI软件栈"
+      ]
+    },
+    {
+      "id": "ai/csv-2dffc483229dd457db01",
+      "column": "ai",
+      "path": [
+        "AI软件栈",
+        "应用软件栈"
+      ]
+    },
+    {
+      "id": "ai/ai-be2aa334995df2f5",
+      "column": "ai",
+      "path": [
+        "AI软件栈",
+        "计算软件栈"
+      ]
+    },
+    {
+      "id": "ai/csv-868f64211636a2fd17d0",
+      "column": "ai",
+      "path": [
+        "AI软件栈",
+        "计算架构"
+      ]
+    },
+    {
+      "id": "cases",
+      "column": "cases",
+      "path": [
+        "应用案例"
+      ]
+    },
+    {
+      "id": "cases/cases-0de8e427fbbfcf6f",
+      "column": "cases",
+      "path": [
+        "应用案例",
+        "Robot 应用"
+      ]
+    },
+    {
+      "id": "cases/cases-bf554e640638f372",
+      "column": "cases",
+      "path": [
+        "应用案例",
+        "Computer 应用"
+      ]
+    },
+    {
+      "id": "cases/cases-teaching-practice",
+      "column": "cases",
+      "path": [
+        "应用案例",
+        "教学与实践"
+      ]
+    },
+    {
+      "id": "tools",
+      "column": "tools",
+      "path": [
+        "常用工具"
+      ]
+    },
+    {
+      "id": "tools/csv-92c9ce85db6851f65a96",
+      "column": "tools",
+      "path": [
+        "常用工具",
+        "进迭云"
+      ]
+    },
+    {
+      "id": "tools/tools-common-manuals",
+      "column": "tools",
+      "path": [
+        "常用工具",
+        "使用手册"
+      ]
+    },
+    {
+      "id": "tools/tools-d90c6909d3eab047",
+      "column": "tools",
+      "path": [
+        "常用工具",
+        "SpacemiT Studio"
+      ]
+    }
+  ]
+}

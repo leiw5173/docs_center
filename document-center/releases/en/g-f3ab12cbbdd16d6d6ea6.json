@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "language": "en",
+  "scopes": [
+    {
+      "repoId": "maintenance-test",
+      "repository": "leiw5173/docs_test",
+      "prefix": "maintenance-test",
+      "rootDep": 1,
+      "column": "cases",
+      "parentNavigationId": "cases/cases-teaching-practice",
+      "navigationPath": [
+        "应用案例",
+        "教学与实践"
+      ],
+      "language": "en",
+      "commit": "83b31af2c2273ed030acda990c30293048875206",
+      "documents": [
+        {
+          "path": "en/guide/index.md",
+          "sha256": "7ca39e40b04959757fe073f9c5b1e797ff12b02b2a4e1be19a19cbfd802ddb8d",
+          "title": "Test guide",
+          "sidebarPosition": 1,
+          "softwareVersion": null,
+          "references": [
+            "maintenance-test/en/guide/steps.md",
+            "maintenance-test/en/index.md"
+          ]
+        },
+        {
+          "path": "en/guide/steps.md",
+          "sha256": "3edd02678b8f354230b3797f2be7a5e0b06c2ca4cb805142ae6892cbb94db68e",
+          "title": "Onboarding test steps",
+          "sidebarPosition": 2,
+          "softwareVersion": "test-1.0",
+          "references": [
+            "maintenance-test/en/guide/index.md"
+          ]
+        },
+        {
+          "path": "en/index.md",
+          "sha256": "c7595d174f1da8fef8ad63af8cca5de9e4fa4aca0194582a19258e31cb2fbdc5",
+          "title": "Onboarding workflow test",
+          "sidebarPosition": 1,
+          "softwareVersion": null,
+          "references": [
+            "maintenance-test/en/guide/index.md"
+          ]
+        }
+      ],
+      "assets": [
+        {
+          "path": "en/images/flow.svg",
+          "sha256": "b50e8b3b1ce1241ba0dbb1082f9b84ba251acb87bbe25e81b26b3eeebc03d86a"
+        }
+      ]
+    }
+  ],
+  "references": {},
+  "redirects": {},
+  "labels": {},
+  "feedback": [],
+  "reviewRequired": [
+    "content-completeness",
+    "references",
+    "version-archive",
+    "translations",
+    "directory-order",
+    "address-migration"
+  ],
+  "warnings": [],
+  "groupId": "g-f3ab12cbbdd16d6d6ea6",
+  "groupRepositories": [
+    "maintenance-test"
+  ]
+}

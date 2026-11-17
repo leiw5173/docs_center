@@ -2,15 +2,18 @@ name: 文档反馈与治理调整
 description: 由文档团队协调正文修正、地址迁移、标签与版本归档
 title: '[文档反馈] '
 body:
+  - type: markdown
+    attributes:
+      value: 本表单由文档团队人工协调，不会直接修改正文、目录或发布内容。分类申请请先查看[分类目录表](https://github.com/leiw5173/docs_center/blob/main/docs/category-catalog.md)；说明父分类、名称、内容范围、来源仓库和负责人。
   - type: input
     id: document
-    attributes: {label: 文档或发布 PR, description: 填写文档地址或发布 PR 链接}
+    attributes: {label: 文档或发布 PR, description: 填写文档地址或发布 PR 链接；分类申请填写来源仓库或现有父分类页面地址}
     validations: {required: true}
   - type: dropdown
     id: kind
     attributes:
       label: 问题类型
-      options: [正文或资源错误, 目录链接错误, 地址迁移映射, 标签调整, 版本归档, 其他]
+      options: [正文或资源错误, 目录链接错误, 分类新增或调整, 地址迁移映射, 标签调整, 版本归档, 其他]
     validations: {required: true}
   - type: textarea
     id: details

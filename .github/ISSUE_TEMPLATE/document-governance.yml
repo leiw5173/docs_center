@@ -2,6 +2,9 @@ name: 补充发布 PR 的治理信息
 description: 文档团队填写表单，自动更新待发布 PR 并重跑检查
 title: '[文档治理] '
 body:
+  - type: markdown
+    attributes:
+      value: 正文及目录 index.md 的修改请回业务仓库提交 PR。本表单用于已有候选的迁移、标签、引用和反馈；新接入见[填写指南](https://github.com/leiw5173/docs_center/blob/main/docs/repository-registration.md)，分类申请见[分类目录表](https://github.com/leiw5173/docs_center/blob/main/docs/category-catalog.md)。
   - type: dropdown
     id: language
     attributes: {label: 发布语言, options: [zh, en]}

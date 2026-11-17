@@ -1,7 +1,8 @@
 {
   "schemaVersion": 1,
   "change": {
-    "repositoryId": "maintenance-test"
+    "repositoryId": "maintenance-test",
+    "onboarding": "document-center/onboarding/issue-5.json"
   },
   "repositories": [
     {
@@ -187,7 +188,8 @@
         "教学与实践"
       ],
       "languages": [
-        "zh"
+        "zh",
+        "en"
       ]
     }
   ]
