@@ -9,9 +9,9 @@ function stageStatus(event,needs) {
     return null;
   }
   if(event.pull_request?.head.ref.startsWith('document-registration/')&&needs['registration-access']?.result!=='success')return {status:'接入检查失败',message:'请检查来源仓库、分支、语言和分类信息；接入检查通过后再进行首版内容检查与预览。'};
-  if(needs.preview?.result!=='success')return {status:'检查失败',message:'正文、资源、目录链接问题回业务仓库修正；分类、迁移与引用登记通过治理 Issue 补充。'};
+  if(needs.preview?.result!=='success')return {status:'检查失败',message:'正文、资源、目录链接问题回业务仓库修正；分类、迁移与引用登记通过治理 Issue 补充。内容检查已运行时，在工作流摘要及 document-preview Artifact 的 report.md 查看八类逐项结果。'};
   if(needs['backend-preview']?.result!=='success')return {status:'预览未通过',message:'请查看预览工作流记录并协调修正，保持此 PR 待确认。'};
-  return {status:'待文档团队确认',message:'自动检查和预览通过，请核对内容、引用关联组、目录子类、语言及版本归档后手动合并。'};
+  return {status:'待文档团队确认',message:'自动检查和预览通过，请核对内容、引用关联组、目录子类、语言及版本归档后手动合并。八类逐项结果见工作流摘要及 document-preview Artifact 的 report.md；提醒仍需人工确认。'};
 }
 async function reportStage(api,{repository,event,needs,runId}) {
   const pr=event.pull_request;if(!pr||pr.head.repo.full_name!==repository)return;

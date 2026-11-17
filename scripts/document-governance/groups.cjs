@@ -24,7 +24,7 @@ function selectGroup(result,group) {
   const manifest={...result.manifest,groupId:group.groupId,groupRepositories:[...group.repositories],scopes:result.manifest.scopes.filter(s=>selected.has(s.repoId)),
     references:entries(result.manifest.references,k=>belongs(k)),redirects:entries(result.manifest.redirects,(k,v)=>belongs(k)||belongs(v)),
     labels:entries(result.manifest.labels,k=>belongs(k)),feedback:(result.manifest.feedback||[]).filter(f=>belongs(f.document||'')),warnings:result.warnings.filter(w=>selected.has(w.repo)||(!w.repo&&belongs(w.file||'')))};
-  return {manifest,digest:sha(JSON.stringify(manifest)),errors:result.errors.filter(e=>selected.has(e.repo)||(!e.repo&&belongs(e.file||''))),warnings:manifest.warnings,pages:new Map([...result.pages].filter(([key])=>belongs(key)))};
+  return {manifest,digest:sha(JSON.stringify(manifest)),errors:result.errors.filter(e=>selected.has(e.repo)||(!e.repo&&belongs(e.file||''))),warnings:manifest.warnings,pages:new Map([...result.pages].filter(([key])=>belongs(key))),previous:result.previous?{scopes:result.previous.scopes.filter(s=>selected.has(s.repoId))}:null};
 }
 function releaseLocation(language,groupId) {
   if(!['zh','en'].includes(language)||(groupId&&!/^g-[a-f0-9]{20}$/.test(groupId)))throw Error('Invalid release identity');

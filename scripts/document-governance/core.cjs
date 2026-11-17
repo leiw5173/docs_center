@@ -5,6 +5,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const MarkdownIt = require('markdown-it');
 const yaml = require('js-yaml');
+const {checkReport,reportMarkdown}=require('./check-report.cjs');
 const md = new MarkdownIt({html: false, linkify: false});
 const sha = data => crypto.createHash('sha256').update(data).digest('hex');
 const escape = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -93,8 +94,10 @@ function build({registry,roots,revisions,language,previous=null,overrides={}}) {
     for(const [file,a] of parsed) {
       const h1=a.headings.filter(h=>h.level==='h1');
       if(!h1.length||!a.body.trim())issue(errors,r.id,file,'incomplete','Missing H1 or empty body');
-      if(!a.tokens.some(t=>!['heading_open','heading_close','inline'].includes(t.type))||/\b(?:TODO|TBD)\b|待补充|待完善/.test(a.body))issue(warnings,r.id,file,'content-review','Content appears unfinished; document team must review completeness');
-      if(a.headings.some(h=>/^\d+(?:\.\d+)*[.、\s]/.test(h.title)))issue(warnings,r.id,file,'numbered-title','Review numeric chapter prefix');
+      const visibleText=tokensOf(a.tokens).filter(t=>t.type==='text').map(t=>t.content).join('\n');
+      const emptySection=a.tokens.some((t,i)=>t.type==='heading_close'&&(!a.tokens[i+1]||(a.tokens[i+1].type==='heading_open'&&Number(a.tokens[i+1].tag.slice(1))<=Number(t.tag.slice(1)))));
+      if(emptySection||/\b(?:TODO|TBD)\b|待补充|待完善/.test(visibleText))issue(warnings,r.id,file,'content-review','Content appears unfinished (empty section or placeholder); document team must review completeness');
+      if([...a.headings.map(h=>h.title),a.data.title||''].some(title=>/^\d+(?:\.\d+)*(?:[.、\s]|$)/.test(title)))issue(warnings,r.id,file,'numbered-title','Review numeric chapter prefix');
       for(const t of a.tokens)if(t.type==='ordered_list_open' && t.attrGet('start') && t.attrGet('start')!=='1')issue(warnings,r.id,file,'list-start','Ordered list does not start at 1');
       if(!source.has(file.replace(new RegExp(`^${language}/`),language==='zh'?'en/':'zh/')))issue(warnings,r.id,file,'translation','Other language counterpart is missing; release remains independent');
       let dir=path.posix.dirname(file);while(dir!=='.') {if(!source.has(`${dir}/index.md`))issue(errors,r.id,file,'index',`Missing ${dir}/index.md`);if(dir===language)break;dir=path.posix.dirname(dir);}
@@ -124,7 +127,7 @@ function build({registry,roots,revisions,language,previous=null,overrides={}}) {
   for(const [from,to]of Object.entries(overrides.redirects||{}))if(newDocs.has(from)||!newDocs.has(to))issue(errors,'',from,'redirect','Redirect must map a removed document to an existing document');
   for(const [id,labels]of Object.entries(overrides.labels||{}))if(!newDocs.has(id)||!Array.isArray(labels)||labels.some(x=>typeof x!=='string'||!x.trim()||x.length>100))issue(errors,'',id,'labels','Labels must belong to a released document and be a list of text values');
   const manifest={schemaVersion:1,language,scopes,references:overrides.references||{},redirects:overrides.redirects||{},labels:overrides.labels||{},feedback:overrides.feedback||[],reviewRequired:['content-completeness','references','version-archive','translations','directory-order','address-migration'],warnings};
-  return {manifest,digest:sha(JSON.stringify(manifest)),errors,warnings,pages};
+  return {manifest,digest:sha(JSON.stringify(manifest)),errors,warnings,pages,previous};
 }
 function writePreview(result,out) {
   fs.mkdirSync(out,{recursive:true});
@@ -149,7 +152,9 @@ function writePreview(result,out) {
     fs.writeFileSync(dest,`<!doctype html><html lang="${result.manifest.language}"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'none'; base-uri 'none'; form-action 'none'"><title>${escape(p.data.title||key)}</title><p>候选预览 · ${escape(p.revision)}</p><article>${md.renderer.render(tokens,md.options,{})}</article></html>`);
     items.push(`<li><a href="${escape(`${key}.html`)}">${escape(key)}</a></li>`);
   }
-  fs.writeFileSync(path.join(out,'index.html'),`<!doctype html><meta charset="utf-8"><title>文档候选预览</title><h1>文档候选预览</h1><p>清单 ${result.digest}</p><ul>${items.join('')}</ul>`);
-  fs.writeFileSync(path.join(out,'report.json'),JSON.stringify({digest:result.digest,errors:result.errors,warnings:result.warnings},null,2));
+  const report=checkReport(result),markdown=reportMarkdown(report);
+  fs.writeFileSync(path.join(out,'index.html'),`<!doctype html><meta charset="utf-8"><title>文档候选预览</title><h1>文档候选预览</h1><p>清单 ${result.digest}</p><p><a href="report.md">检查报告</a> · <a href="report.json">结构化检查结果</a></p>${md.render(markdown)}<ul>${items.join('')}</ul>`);
+  fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));
+  fs.writeFileSync(path.join(out,'report.md'),markdown);
 }
 module.exports={build,writePreview,validateRegistry,snapshot,analyze,sha,git,compareCandidate};

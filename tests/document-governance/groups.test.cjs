@@ -24,9 +24,11 @@ test('a new PR replaces all affected old candidates when groups merge or split',
 });
 test('unrelated repository check errors do not block a selected group; subcategory remains in its manifest',()=>{
   const a={...scope('a'),parentNavigationId:'cases/cases-teaching-practice',navigationPath:['应用案例','教学与实践']};
-  const source={manifest:{language:'zh',scopes:[a,scope('b')],references:{},redirects:{},labels:{},feedback:[]},errors:[{repo:'a',code:'anchor'},{repo:'b',code:'index'}],warnings:[{repo:'b',code:'translation'}],pages:new Map([['a/zh/index.md',{}],['b/zh/index.md',{}]])};
+  const source={manifest:{language:'zh',scopes:[a,scope('b')],references:{},redirects:{},labels:{},feedback:[]},errors:[{repo:'a',code:'anchor'},{repo:'b',code:'index'}],warnings:[{repo:'b',code:'translation'}],pages:new Map([['a/zh/index.md',{}],['b/zh/index.md',{}]]),previous:{scopes:[scope('a'),scope('unrelated')]}};
   const selected=selectGroup(source,referenceGroups(source.manifest).find(g=>g.repositories.includes('a')));
   assert.deepEqual(selected.errors,[{repo:'a',code:'anchor'}]);assert.deepEqual(selected.warnings,[]);assert.equal(selected.pages.size,1);assert.deepEqual(selected.manifest.scopes[0].navigationPath,['应用案例','教学与实践']);
+  const report=require('../../scripts/document-governance/check-report.cjs').checkReport(selected);
+  assert.equal(report.hasBaseline,true);assert.deepEqual(report.addresses.removed,[]);assert.deepEqual(report.versionReview,[]);
 });
 test('accepted pointers select the right source revision after a former group splits',t=>{
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'accepted-state-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
