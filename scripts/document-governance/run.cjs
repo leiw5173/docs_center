@@ -122,10 +122,12 @@ async function candidate(registry,temp,attempt=0,sourceOverride=null) {
       const existing=pending.find(p=>p.location.branch===location.branch);
       const unchanged=group.repositories.every(id=>scopeFingerprint(selected.manifest.scopes.find(s=>s.repoId===id))===scopeFingerprint(previous.scopes.find(s=>s.repoId===id)));
       if(!existing&&unchanged){for(const id of group.repositories)completed.add(id);continue;}
-      if(existing&&JSON.stringify(existing.manifest)===JSON.stringify(selected.manifest)){for(const id of group.repositories)completed.add(id);continue;}
-      try{await writeCandidate(repo,location,selected.manifest,existing);}
-      catch(error){if([409,422].includes(error.httpStatus)&&attempt<3)return candidate(registry,fs.mkdtempSync(path.join(temp,'retry-')),attempt+1,source);throw error;}
-      const body=`引用关联组：${group.repositories.join(', ')}\n\n清单 SHA-256：${selected.digest}\n\n阻断问题：${selected.errors.length}；人工核对项：${selected.warnings.length}。查看检查报告和预览。\n\n- [ ] 内容完整性、直接及间接引用、目录子类已核对\n- [ ] 标签、反馈、地址迁移及版本归档已核对\n- [ ] 预览通过，由文档团队手动合并\n\n同组新修订更新本 PR；未关联来源独立发布。`;
+      if(!existing||JSON.stringify(existing.manifest)!==JSON.stringify(selected.manifest)) {
+        try{await writeCandidate(repo,location,selected.manifest,existing);}
+        catch(error){if([409,422].includes(error.httpStatus)&&attempt<3)return candidate(registry,fs.mkdtempSync(path.join(temp,'retry-')),attempt+1,source);throw error;}
+      }
+      const migrationReport=require('./check-report.cjs').migrationMarkdown(selected,repo);
+      const body=`引用关联组：${group.repositories.join(', ')}\n\n清单 SHA-256：${selected.digest}\n\n阻断问题：${selected.errors.length}；人工核对项：${selected.warnings.length}。查看检查报告和预览。\n\n${migrationReport}\n\n- [ ] 内容完整性、直接及间接引用、目录子类已核对\n- [ ] 标签、反馈、地址迁移及版本归档已核对\n- [ ] 预览通过，由文档团队手动合并\n\n同组新修订更新本 PR；未关联来源独立发布。`;
       if(existing)await api(`/repos/${repo}/pulls/${existing.pr.number}`,'PATCH',{body});
       else {const metadata=await api(`/repos/${repo}`);await api(`/repos/${repo}/pulls`,'POST',{title:`文档发布候选（${language}：${group.repositories.join(', ')}）`,head:location.branch,base:metadata.default_branch,body});}
       for(const id of group.repositories)completed.add(id);
@@ -165,6 +167,13 @@ async function check(registry,temp,fileOverride=null,outputOverride=null) {
   if(JSON.stringify(stable(input))!==JSON.stringify(stable(result.manifest)))result.errors.push({code:'manifest-mismatch',message:'Registry or immutable source differs from reviewed manifest'});
   const out=path.resolve(outputOverride||argument('--output',path.join(os.tmpdir(),'document-preview')));writePreview(result,out);
   if(process.env.GITHUB_STEP_SUMMARY)fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,fs.readFileSync(path.join(out,'report.md')));
+  if(process.env.GITHUB_ACTIONS==='true') {
+    const commandText=s=>String(s).replace(/%/g,'%25').replace(/\r/g,'%0D').replace(/\n/g,'%0A');
+    for(const warning of result.warnings.filter(w=>w.code==='address-change')) {
+      const from=warning.file,to=result.manifest.redirects[from];
+      console.log(`::warning title=文档地址变更::${commandText(`${from} → ${to||'目标未确定，阻断发布'}${to?'；发布后旧链接自动跳转':''}`)}`);
+    }
+  }
   fs.writeFileSync(path.join(out,'manifest.json'),JSON.stringify(input,null,2));
   for(const error of result.errors)console.error(JSON.stringify(error));
   console.log(JSON.stringify({manifestDigest:sha(JSON.stringify(input)),errors:result.errors.length,warnings:input.warnings.length,preview:out}));
@@ -261,7 +270,7 @@ async function governanceChange(attempt=0) {
   }
   try{await api(`/repos/${repo}/contents/${existing.location.file}`,'PUT',{branch,sha:existing.content.sha,message:`docs: apply governance issue #${issue.number}`,content:Buffer.from(JSON.stringify(manifest,null,2)+'\n').toString('base64')});}
   catch(error){if(error.httpStatus===409&&attempt<3)return governanceChange(attempt+1);throw error;}
-  if(value('调整类型')==='引用登记'){const scope=manifest.scopes.find(s=>s.repoId===target.split('/')[0]);const temp=fs.mkdtempSync(path.join(os.tmpdir(),'governance-regroup-'));try{await candidate(read(path.join(root,'document-center/registry.json')),temp,0,{repository:scope.repository,commit:scope.commit});}finally{fs.rmSync(temp,{recursive:true,force:true});}}
+  if(['引用登记','地址迁移'].includes(value('调整类型'))){const scope=manifest.scopes.find(s=>s.repoId===target.split('/')[0]);const temp=fs.mkdtempSync(path.join(os.tmpdir(),'governance-regroup-'));try{await candidate(read(path.join(root,'document-center/registry.json')),temp,0,{repository:scope.repository,commit:scope.commit});}finally{fs.rmSync(temp,{recursive:true,force:true});}}
   console.log(`Governance issue #${issue.number} applied to release PR #${existing.pr.number}; CI must rerun`);
 }
 async function publish() {
