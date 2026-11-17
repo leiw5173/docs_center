@@ -1,5 +1,8 @@
 {
   "schemaVersion": 1,
+  "change": {
+    "repositoryId": "maintenance-test"
+  },
   "repositories": [
     {
       "id": "docs-ai",
@@ -169,6 +172,22 @@
       "languages": [
         "zh",
         "en"
+      ]
+    },
+    {
+      "id": "maintenance-test",
+      "repository": "leiw5173/docs_test",
+      "branch": "main",
+      "prefix": "maintenance-test",
+      "rootDep": 1,
+      "column": "cases",
+      "parentNavigationId": "cases/cases-teaching-practice",
+      "navigationPath": [
+        "应用案例",
+        "教学与实践"
+      ],
+      "languages": [
+        "zh"
       ]
     }
   ]
