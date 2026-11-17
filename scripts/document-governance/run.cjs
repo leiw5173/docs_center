@@ -309,7 +309,8 @@ async function backendPreview() {
     if(!siteUrl)throw Error('Candidate artifact exists but test site was not deployed');
     const logical=id=>{const parts=id.split('/');const scope=manifest.scopes.find(s=>s.repoId===parts[0]);if(!scope||parts[1]!==manifest.language)throw Error('Migration source is outside preview');return scope.prefix+'/'+parts.slice(2).join('/');};
     const redirects=Object.entries(manifest.redirects||{}).slice(0,4).map(([from,to])=>{const sourcePath=logical(from),targetPath=logical(to),url=new URL('/community/document/info',siteUrl);url.search=new URLSearchParams({preview:digest,lang:manifest.language,nodepath:sourcePath});return {from,to,sourcePath,targetPath,url:url.href};});
-    const site={language:manifest.language,digest,url:siteUrl,redirects};require('./preview-sites.cjs').previewSites([site]);
+    const pages=require('./preview-sites.cjs').changedPages(manifest,baseState(manifest.language),siteUrl);
+    const site={language:manifest.language,digest,url:siteUrl,pages,redirects};require('./preview-sites.cjs').previewSites([site]);
     const deployed=await fetch(siteUrl,{redirect:'error',signal:AbortSignal.timeout(30000)});
     if(!deployed.ok||!deployed.headers.get('content-type')?.includes('text/html')||!(await deployed.text()).includes('id="app"'))throw Error('Deployed preview is not the document center application');
     const contextUrl=new URL(`/document-previews/${digest}/api/document/preview-context`,siteUrl);
