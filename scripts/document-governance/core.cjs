@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const MarkdownIt = require('markdown-it');
 const yaml = require('js-yaml');
 const {checkReport,reportMarkdown}=require('./check-report.cjs');
+const {migrations}=require('./migrations.cjs');
 const md = new MarkdownIt({html: false, linkify: false});
 const sha = data => crypto.createHash('sha256').update(data).digest('hex');
 const escape = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -124,9 +125,9 @@ function build({registry,roots,revisions,language,previous=null,overrides={}}) {
   const newDocs=new Map(scopes.flatMap(s=>s.documents.map(d=>[`${s.repoId}/${d.path}`,d])));
   for(const scope of scopes)for(const doc of scope.documents)for(const target of doc.references)if(!newDocs.has(target))issue(errors,scope.repoId,doc.path,'reference-group',`Reference outside complete release group: ${target}`);
   for(const [id,old]of oldDocs)if(!newDocs.has(id))issue(warnings,id.split('/')[0],id,'address-change','Removed document: review redirects, references and archive');else if(old.softwareVersion!==newDocs.get(id).softwareVersion)issue(warnings,id.split('/')[0],id,'version','Version changed: review old version archive');
-  for(const [from,to]of Object.entries(overrides.redirects||{}))if(newDocs.has(from)||!newDocs.has(to))issue(errors,'',from,'redirect','Redirect must map a removed document to an existing document');
+  const migration=migrations(scopes,previous,overrides.redirects,roots);errors.push(...migration.errors);
   for(const [id,labels]of Object.entries(overrides.labels||{}))if(!newDocs.has(id)||!Array.isArray(labels)||labels.some(x=>typeof x!=='string'||!x.trim()||x.length>100))issue(errors,'',id,'labels','Labels must belong to a released document and be a list of text values');
-  const manifest={schemaVersion:1,language,scopes,references:overrides.references||{},redirects:overrides.redirects||{},labels:overrides.labels||{},feedback:overrides.feedback||[],reviewRequired:['content-completeness','references','version-archive','translations','directory-order','address-migration'],warnings};
+  const manifest={schemaVersion:1,language,scopes,references:overrides.references||{},redirects:migration.redirects,labels:overrides.labels||{},feedback:overrides.feedback||[],reviewRequired:['content-completeness','references','version-archive','translations','directory-order','address-migration'],warnings};
   return {manifest,digest:sha(JSON.stringify(manifest)),errors,warnings,pages,previous};
 }
 function writePreview(result,out) {

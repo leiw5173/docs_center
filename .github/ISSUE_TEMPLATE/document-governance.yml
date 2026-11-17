@@ -4,7 +4,7 @@ title: '[文档治理] '
 body:
   - type: markdown
     attributes:
-      value: 正文及目录 index.md 的修改请回业务仓库提交 PR。本表单用于已有候选的迁移、标签、引用和反馈；新接入见[填写指南](https://github.com/leiw5173/docs_center/blob/main/docs/repository-registration.md)，分类申请见[分类目录表](https://github.com/leiw5173/docs_center/blob/main/docs/category-catalog.md)。
+      value: 目录或文档改名通常自动登记旧链接跳转，无需填写本表。无法确定新位置时，从候选 PR 点击“选择新位置”，表单会自动填好，核对后提交即可。本表也用于标签、引用和反馈；正文与 index.md 请回业务仓库修改。
   - type: dropdown
     id: language
     attributes: {label: 发布语言, options: [zh, en]}
@@ -17,12 +17,12 @@ body:
     validations: {required: true}
   - type: input
     id: target
-    attributes: {label: 文档标识, description: 发布清单中的 登记ID/语言/文件路径；地址迁移填写旧标识}
+    attributes: {label: 文档标识, description: 从候选 PR 的目标选择链接进入时自动填写；地址迁移表示原来的文档位置，无需手动修改}
     validations: {required: true}
   - type: input
     id: url
     attributes: {label: 引用原地址, description: 仅引用登记填写正文中的原始链接}
   - type: textarea
     id: content
-    attributes: {label: 调整内容, description: 地址迁移或引用登记填写目标文档标识；标签用逗号分隔；反馈填写说明}
+    attributes: {label: 调整内容, description: 地址迁移表示新文档位置，由 PR 的选择链接自动填写；标签用逗号分隔，反馈填写说明}
     validations: {required: true}
