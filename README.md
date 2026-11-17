@@ -31,6 +31,8 @@
 
 新仓库接入后，按 [新仓库注册与业务 PR 合并两类测试](docs/maintenance-acceptance.md) 验收；可使用 [测试文档样例](examples/business-repository) 准备内容。
 
+已完成的真实测试及 Issue、PR、检查和结果记录见 [维护流程验收记录](docs/maintenance-acceptance-results.md)。
+
 ## 维护约定
 
 - 中文与英文分别维护；英文缺失本身不阻断中文，跨语言引用需单独核对。
