@@ -6,7 +6,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "node --test tests/document-governance/*.test.cjs",
+    "test": "node scripts/document-governance/sync-registration.cjs --check && node --test tests/document-governance/*.test.cjs",
+    "sync:categories": "node scripts/document-governance/sync-registration.cjs",
     "check": "node scripts/document-governance/run.cjs check",
     "demo": "node scripts/document-governance/demo.cjs"
   },

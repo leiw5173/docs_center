@@ -4,6 +4,7 @@ const path=require('node:path');
 const {execFileSync}=require('node:child_process');
 const {build,writePreview,validateRegistry,snapshot,sha,git,compareCandidate}=require('./core.cjs');
 const {referenceGroups,selectGroup,releaseLocation,parseReleaseBranch,acceptedState,scopeFingerprint,affectedRepositories}=require('./groups.cjs');
+const {registrationFromIssue}=require('./registration.cjs');
 const root=path.resolve(__dirname,'../..');
 const read=file=>JSON.parse(fs.readFileSync(file,'utf8'));
 const encode=value=>encodeURIComponent(value);
@@ -166,18 +167,11 @@ async function check(registry,temp) {
   console.log(JSON.stringify({manifestDigest:sha(JSON.stringify(input)),errors:result.errors.length,warnings:input.warnings.length,preview:out}));
   if(result.errors.length)process.exitCode=1;
 }
-function registrationFromIssue(body) {
-  const fields={};let name=null;
-  for(const line of body.split('\n')){if(line.startsWith('### ')){name=line.slice(4).trim();fields[name]='';}else if(name)fields[name]+=line+'\n';}
-  const value=name=>(fields[name]||'').trim();
-  const optional=name=>{const text=value(name);return text==='_No response_'?'':text;};
-  return {id:value('登记 ID'),repository:value('来源仓库'),branch:value('分支')||'main',prefix:value('目标路径前缀'),rootDep:Number(value('目录层级 rootDep')),column:value('目标栏目'),...(optional('子类节点 ID')?{parentNavigationId:optional('子类节点 ID')}:{}),...(optional('分类路径')?{navigationPath:optional('分类路径').split('/').map(p=>p.trim()).filter(Boolean)}:{}),languages:value('语言').split(',').map(x=>x.trim()).filter(Boolean)};
-}
 async function registration(registry) {
   const event=read(process.env.GITHUB_EVENT_PATH),issue=event.issue,repo=process.env.GITHUB_REPOSITORY;
   if(!issue||!issue.title.startsWith('[文档接入]'))return;
   await authorizeMaintainer(repo,issue.user.login);
-  const entry=registrationFromIssue(issue.body||'');
+  const entry=registrationFromIssue(issue.body||'',registry);
   const updated={schemaVersion:1,change:{repositoryId:entry.id},repositories:[...registry.repositories.filter(r=>r.id!==entry.id),entry].sort((a,b)=>a.id.localeCompare(b.id))};validateRegistry(updated);
   const branch=`document-registration/issue-${issue.number}`,repository=await api(`/repos/${repo}`);
   const prs=await api(`/repos/${repo}/pulls?state=open&head=${encode(repo.split('/')[0]+':'+branch)}`);
@@ -189,7 +183,7 @@ async function registration(registry) {
   }
   const previous=await api(`/repos/${repo}/contents/document-center/registry.json?ref=${encode(branch)}`);
   await api(`/repos/${repo}/contents/document-center/registry.json`,'PUT',{branch,message:`docs: register ${entry.repository}`,sha:previous.sha,content:Buffer.from(JSON.stringify(updated,null,2)+'\n').toString('base64')});
-  const body=`来自接入申请 #${issue.number}。\n\n请核对来源、语言、目标路径、排序层级和后端注册 ID。该 PR 仅登记来源，不发布正文。\n\nCloses #${issue.number}`;
+  const body=`来自接入申请 #${issue.number}。\n\n| 核对项 | 申请结果 |\n| --- | --- |\n| 来源 | ${entry.repository} |\n| 来源标识 | ${entry.id} |\n| 分支 / 语言 | ${entry.branch} / ${entry.languages.join(', ')} |\n| 目标分类 | ${(entry.navigationPath||[entry.column]).join(' / ')} |\n| 地址前缀 | ${entry.prefix} |\n\n新来源标识和地址前缀默认自动生成；已有来源自动沿用原值。请按[接入填写指南](https://github.com/${repo}/blob/main/docs/repository-registration.md)核对分类与地址。该 PR 仅登记来源，不发布正文。\n\nCloses #${issue.number}`;
   if(prs.length)await api(`/repos/${repo}/pulls/${prs[0].number}`,'PATCH',{body});
   else await api(`/repos/${repo}/pulls`,'POST',{title:`登记文档仓库 ${entry.repository}`,head:branch,base:repository.default_branch,body});
 }
@@ -262,4 +256,4 @@ async function main(){
   try{switch(process.argv[2]){case 'candidate':return await candidate(registry,temp);case 'registration':return await registration(registry);case 'governance-change':return await governanceChange();case 'validate-registry':return validateRegistry(registry);case 'check-registration':return checkRegistration(registry,temp);case 'check':return await check(registry,temp);case 'backend-preview':return await backendPreview();case 'publish':return await publish();case 'report-stage':return await require('./report.cjs').reportStage(api,{repository:process.env.GITHUB_REPOSITORY,event:read(process.env.GITHUB_EVENT_PATH),needs:JSON.parse(process.env.DOCUMENT_JOB_RESULTS||'{}'),runId:process.env.GITHUB_RUN_ID});default:throw Error('Use candidate, registration, governance-change, validate-registry, check-registration, check --manifest FILE, backend-preview, publish, or report-stage');}}finally{fs.rmSync(temp,{recursive:true,force:true});}
 }
 if(require.main===module)main().catch(e=>{console.error(e.message);process.exitCode=1;});
-module.exports={cloneSources,registrationFromIssue,candidate,writeCandidate,checkRegistration};
+module.exports={cloneSources,registrationFromIssue,registration,candidate,writeCandidate,checkRegistration};

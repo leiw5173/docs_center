@@ -76,7 +76,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: node --test tests/document-governance/*.test.cjs
+      - run: npm test
       - name: Validate registration
         if: startsWith(github.head_ref, 'document-registration/')
         run: node scripts/document-governance/run.cjs check-registration

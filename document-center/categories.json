@@ -1,0 +1,200 @@
+{
+  "schemaVersion": 1,
+  "verifiedOn": "2026-11-17",
+  "categories": [
+    {
+      "id": "hardware",
+      "column": "hardware",
+      "path": [
+        "硬件"
+      ]
+    },
+    {
+      "id": "hardware/hardware-5dcfdf80b583fa3f/csv-a35bc7e7a76efde887af",
+      "column": "hardware",
+      "path": [
+        "硬件",
+        "芯片",
+        "K 系列 AI CPU 芯片"
+      ]
+    },
+    {
+      "id": "hardware/hardware-5dcfdf80b583fa3f/csv-bda3c984cf3295872e92",
+      "column": "hardware",
+      "path": [
+        "硬件",
+        "芯片",
+        "P 系列电源芯片"
+      ]
+    },
+    {
+      "id": "hardware/hardware-5dcfdf80b583fa3f/csv-3332147b5f8dd5b8b41b",
+      "column": "hardware",
+      "path": [
+        "硬件",
+        "芯片",
+        "V 系列服务器芯片"
+      ]
+    },
+    {
+      "id": "hardware/hardware-7e1f3854607bec1f/hardware-0fb98f8a081a35d3",
+      "column": "hardware",
+      "path": [
+        "硬件",
+        "板卡与整机",
+        "K3 系列"
+      ]
+    },
+    {
+      "id": "hardware/hardware-7e1f3854607bec1f/hardware-cb79ff68db281b7f",
+      "column": "hardware",
+      "path": [
+        "硬件",
+        "板卡与整机",
+        "K1 系列"
+      ]
+    },
+    {
+      "id": "hardware/hardware-7e1f3854607bec1f/hardware-3fdbf180960383bb",
+      "column": "hardware",
+      "path": [
+        "硬件",
+        "板卡与整机",
+        "V100 系列"
+      ]
+    },
+    {
+      "id": "hardware/hardware-7e1f3854607bec1f/hardware-ecosystem-devices",
+      "column": "hardware",
+      "path": [
+        "硬件",
+        "板卡与整机",
+        "生态板块与设备"
+      ]
+    },
+    {
+      "id": "hardware/hardware-7e1f3854607bec1f/hardware-138e4a2f6b4047e1",
+      "column": "hardware",
+      "path": [
+        "硬件",
+        "板卡与整机",
+        "硬件配件"
+      ]
+    },
+    {
+      "id": "hardware/hardware-dbbe5bbf851d8f07",
+      "column": "hardware",
+      "path": [
+        "硬件",
+        "支持与服务"
+      ]
+    },
+    {
+      "id": "os",
+      "column": "os",
+      "path": [
+        "操作系统"
+      ]
+    },
+    {
+      "id": "os/os-27e42591c00b5520/os-c048af055eb09c53/os-58574cb392fa9c27/csv-6931c46cbea9893dd2a4",
+      "column": "os",
+      "path": [
+        "操作系统",
+        "Bianbu",
+        "Bianbu 用户指南",
+        "LXQt",
+        "MUSE Pi"
+      ]
+    },
+    {
+      "id": "os/os-27e42591c00b5520/os-c048af055eb09c53/os-58574cb392fa9c27/csv-6931c46cbea9893dd2a4/csv-00c89b75095c39f2530a",
+      "column": "os",
+      "path": [
+        "操作系统",
+        "Bianbu",
+        "Bianbu 用户指南",
+        "LXQt",
+        "MUSE Pi",
+        "MUSE Pi Pro 拓展 I"
+      ]
+    },
+    {
+      "id": "os/os-27e42591c00b5520/os-1f5b2a9125308ddf/csv-ebea5827a9462d920be6",
+      "column": "os",
+      "path": [
+        "操作系统",
+        "Bianbu",
+        "系统集成",
+        "Bianbu 2.1"
+      ]
+    },
+    {
+      "id": "os/os-f4b5b1e54b76e98d/os-11105ec1c221e6c2/os-a6ac06c57226ace8/csv-fcb1b58ebc97119b4ba5",
+      "column": "os",
+      "path": [
+        "操作系统",
+        "Buildroot",
+        "K3 Buildroot",
+        "安全",
+        "CA 开发指南"
+      ]
+    },
+    {
+      "id": "os/os-8aa903fa0d71df65/os-485e1ca357f61597/os-34f4c3443998f92a/csv-de16ffab15b04b59f84a",
+      "column": "os",
+      "path": [
+        "操作系统",
+        "OpenHarmony",
+        "技术专题",
+        "AI推理库专题",
+        "SpaceMIT K3 AI 推理库使用文档（llama.cpp C API"
+      ]
+    },
+    {
+      "id": "os/csv-717ffbdfa8cf697ff011",
+      "column": "os",
+      "path": [
+        "操作系统",
+        "镜像安装"
+      ]
+    },
+    {
+      "id": "ai",
+      "column": "ai",
+      "path": [
+        "AI软件栈"
+      ]
+    },
+    {
+      "id": "cases",
+      "column": "cases",
+      "path": [
+        "应用案例"
+      ]
+    },
+    {
+      "id": "cases/cases-teaching-practice",
+      "column": "cases",
+      "path": [
+        "应用案例",
+        "教学与实践"
+      ]
+    },
+    {
+      "id": "tools",
+      "column": "tools",
+      "path": [
+        "常用工具"
+      ]
+    },
+    {
+      "id": "tools/tools-common-manuals",
+      "column": "tools",
+      "path": [
+        "常用工具",
+        "使用手册"
+      ]
+    }
+  ]
+}
