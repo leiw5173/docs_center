@@ -43,3 +43,19 @@
 两类测试在隔离环境完成，最终结果明确为“本地发布完成”，未启用外部同步；不能据此宣称外部同步或生产环境已验收。
 
 本轮覆盖独立来源及同组候选复用。多仓库直接、间接引用组已有自动测试，但尚未进行多来源真实联调；整站探测与上一完整版本恢复也不在本次通过范围内。
+
+## 新版：同一 PR 完成双语接入与首版发布
+
+2026-11-17，使用 `leiw5173/docs_test` 在尚未登记该来源的隔离执行环境验收；治理记录沿用原测试来源标识。
+
+| 环节 | 实际记录 | 结果 |
+| --- | --- | --- |
+| 申请与唯一接入 PR | [Issue #5](https://github.com/leiw5173/docs_center/issues/5) → [PR #6](https://github.com/leiw5173/docs_center/pull/6) | 同时包含登记信息及中英文首版固定清单，只确认合并一次 |
+| 串行检查与双语预览 | [检查与产物](https://github.com/leiw5173/docs_center/actions/runs/44037605215) | 接入检查通过后检查内容；两个实际预览包的正文、图片、锚点、刷新与返回通过 |
+| 合并前隔离 | 预览完成后核对来源登记与目录 | 来源仍未登记，四份中英文目录快照未变化 |
+| 统一执行 | PR #6 合并 | 登记和两种语言的首版内容一次执行完成，不派发第二个首轮候选 |
+| 最终回报 | [中文](https://github.com/leiw5173/docs_center/pull/6#issuecomment-6941583735)、[英文](https://github.com/leiw5173/docs_center/pull/6#issuecomment-6941584116) | 两个语言的最终结果均在同一个 PR 回报“本地发布完成” |
+| 幂等 | [发布任务重跑](https://github.com/leiw5173/docs_center/actions/runs/44038257095)、真实源事件重投 | 重跑成功，未增加重复登记、目录、结果评论或首轮候选 |
+| 日常更新回归 | [业务 PR #6](https://github.com/leiw5173/docs_test/pull/6) → [普通候选 PR #7](https://github.com/leiw5173/docs_center/pull/7) | 普通候选的内容检查、预览和回报通过；中文更新为 `ONE-PR-BUSINESS-V2`，英文保持 `ONBOARDING-EN-V1` |
+
+首次双语来源提交：`83b31af2c2273ed030acda990c30293048875206`；接入发布修订：`b086c0f4fa484478860f07db22adec6f71b7f2cc`。本次仅本地隔离环境发布，未启用外部同步。
