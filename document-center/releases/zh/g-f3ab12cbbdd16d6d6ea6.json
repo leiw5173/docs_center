@@ -14,7 +14,7 @@
         "教学与实践"
       ],
       "language": "zh",
-      "commit": "eddbbc1ebb69f127c33337accbe15a846eb1fabc",
+      "commit": "e9058ead7197dc3fc5ec73396f44b0e67cd82b9c",
       "documents": [
         {
           "path": "zh/guide/index.md",
@@ -29,7 +29,7 @@
         },
         {
           "path": "zh/guide/steps.md",
-          "sha256": "8adabfee37b24c920bb665641da424896a4a6425c5667c20fc20b9855e4e7a32",
+          "sha256": "0201e82cea0c6b7a17cef5ddce7eff9a7deef31c37c82c98ac78c2a9d1162e2e",
           "title": "维护流程测试步骤",
           "sidebarPosition": 2,
           "softwareVersion": "test-1.0",
