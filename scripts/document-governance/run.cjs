@@ -11,7 +11,7 @@ function argument(name,fallback){const i=process.argv.indexOf(name);return i<0?f
 async function api(resource,method='GET',body) {
   if(!process.env.GH_TOKEN)throw Error('GH_TOKEN is required');
   const response=await fetch(`https://api.github.com${resource}`,{method,headers:{Authorization:`Bearer ${process.env.GH_TOKEN}`,Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28',...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(30000)});
-  if(!response.ok){const error=Error(`GitHub ${method} request failed: HTTP ${response.status}`);error.httpStatus=response.status;throw error;}
+  if(!response.ok){const permissions=response.headers.get('x-accepted-github-permissions');const error=Error(`GitHub ${method} request failed: HTTP ${response.status}${permissions?`; required permissions: ${permissions}`:''}`);error.httpStatus=response.status;throw error;}
   return response.status===204?null:response.json();
 }
 async function authorizeMaintainer(repo,actor) {
