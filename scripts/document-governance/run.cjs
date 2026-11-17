@@ -298,7 +298,7 @@ async function backendPreview() {
   const base=process.env.DOCUMENT_PREVIEW_URL,token=process.env.DOCUMENT_PREVIEW_TOKEN;
   if(!base||!token)throw Error('Backend candidate preview environment is not configured');
   const url=new URL('/admin/documents/previews',base);if(url.protocol!=='https:')throw Error('Preview endpoint must use HTTPS');
-  const sites=[];
+  const sites=[],previews=require('./preview-sites.cjs');
   for(const manifest of manifests){
     const response=await fetch(url,{method:'POST',redirect:'error',headers:{'Content-Type':'application/json','X-Document-Preview-Token':token},body:JSON.stringify(onboarding?{registration,manifest}:manifest),signal:AbortSignal.timeout(120000)});
     if(!response.ok||!response.headers.get('content-type')?.includes('application/zip'))throw Error(`Backend preview failed: HTTP ${response.status}`);
@@ -308,9 +308,9 @@ async function backendPreview() {
     const digest=sha(JSON.stringify(manifest)),siteUrl=response.headers.get('x-document-preview-url');
     if(!siteUrl)throw Error('Candidate artifact exists but test site was not deployed');
     const logical=id=>{const parts=id.split('/');const scope=manifest.scopes.find(s=>s.repoId===parts[0]);if(!scope||parts[1]!==manifest.language)throw Error('Migration source is outside preview');return scope.prefix+'/'+parts.slice(2).join('/');};
-    const redirects=Object.entries(manifest.redirects||{}).slice(0,4).map(([from,to])=>{const sourcePath=logical(from),targetPath=logical(to),url=new URL('/community/document/info',siteUrl);url.search=new URLSearchParams({preview:digest,lang:manifest.language,nodepath:sourcePath});return {from,to,sourcePath,targetPath,url:url.href};});
-    const pages=require('./preview-sites.cjs').changedPages(manifest,baseState(manifest.language),siteUrl);
-    const site={language:manifest.language,digest,url:siteUrl,pages,redirects};require('./preview-sites.cjs').previewSites([site]);
+    const redirects=Object.entries(manifest.redirects||{}).filter(([from,to])=>!previews.directoryMetadata(from)&&!previews.directoryMetadata(to)).slice(0,4).map(([from,to])=>{const sourcePath=logical(from),targetPath=logical(to),url=new URL('/community/document/info',siteUrl);url.search=new URLSearchParams({preview:digest,lang:manifest.language,nodepath:sourcePath});return {from,to,sourcePath,targetPath,url:url.href};});
+    const pages=previews.changedPages(manifest,baseState(manifest.language),siteUrl);
+    const site={language:manifest.language,digest,url:siteUrl,pages,redirects};previews.previewSites([site]);
     const deployed=await fetch(siteUrl,{redirect:'error',signal:AbortSignal.timeout(30000)});
     if(!deployed.ok||!deployed.headers.get('content-type')?.includes('text/html')||!(await deployed.text()).includes('id="app"'))throw Error('Deployed preview is not the document center application');
     const contextUrl=new URL(`/document-previews/${digest}/api/document/preview-context`,siteUrl);
