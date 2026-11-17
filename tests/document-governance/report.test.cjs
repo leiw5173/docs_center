@@ -2,7 +2,7 @@ const {test}=require('node:test');const assert=require('node:assert/strict');
 const {stageStatus,reportStage}=require('../../scripts/document-governance/report.cjs');
 const sha='a'.repeat(40);
 const digest='b'.repeat(64);
-const sites=JSON.stringify([{language:'zh',digest,url:`https://preview.example/document-previews/${digest}/index.html`,redirects:[{from:'a/zh/old.md',to:'a/zh/new.md',url:`https://preview.example/document-previews/${digest}/a/zh/old.md.html`}]}]);
+const sites=JSON.stringify([{language:'zh',digest,url:`https://preview.example/community/document?preview=${digest}&lang=zh`,redirects:[{from:'a/zh/old.md',to:'a/zh/new.md',sourcePath:'a/old.md',targetPath:'a/new.md',url:`https://preview.example/community/document/info?preview=${digest}&lang=zh&nodepath=a%2Fold.md`}]}]);
 const previewJob={result:'success',outputs:{preview_sites:sites}};
 const event={action:'synchronize',pull_request:{number:7,head:{sha,ref:'document-release/zh/g-01234567890123456789',repo:{full_name:'example/governance'}}}};
 test('result reporting distinguishes failed checks, failed preview, pending approval, and accepted publication',()=>{
@@ -21,7 +21,7 @@ test('retries update one status comment and stale heads do not mutate the PR',as
   const input={repository:'example/governance',event,needs:{preview:{result:'failure'}},runId:123};
   await reportStage(api,input);await reportStage(api,input);assert.equal(writes.length,1);assert.equal(writes[0].method,'POST');
   await reportStage(api,{...input,needs:{preview:{result:'success'},'backend-preview':previewJob}});assert.equal(writes.length,2);assert.equal(writes[1].method,'PATCH');
-  assert(comment.body.includes('测试网预览'));assert(comment.body.includes('测试旧链接自动跳转'));assert(comment.body.includes(`https://preview.example/document-previews/${digest}/index.html`));
+  assert(comment.body.includes('测试网预览'));assert(comment.body.includes('测试旧链接自动跳转'));assert(comment.body.includes(`https://preview.example/community/document?preview=${digest}&lang=zh`));
   current='b'.repeat(40);await reportStage(api,input);assert.equal(writes.length,2);
 });
 test('deployed links must be HTTPS, bound to the candidate digest, and share the site origin',()=>{
