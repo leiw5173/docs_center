@@ -26,7 +26,7 @@ async function reportStage(api,{repository,event,needs,runId}) {
     const sites=require('./preview-sites.cjs').previewSites(needs['backend-preview'].outputs.preview_sites);
     const url=text=>text.replace(/[()]/g,c=>c==='('?'%28':'%29');
     const label=text=>text.replace(/[\r\n`\[\]<>*\\]/g,' ');
-    links='\n\n### 测试网预览\n\n候选内容，尚未正式发布；链接与本次修订绑定。\n\n'+sites.map(site=>`- [${site.language==='zh'?'中文':'English'}：打开候选预览](${url(site.url)})\n`+site.redirects.map(link=>`  - [测试旧链接自动跳转：${label(link.from.split('/').slice(1).join('/'))}](${url(link.url)})`).join('\n')).join('\n');
+    links='\n\n### 文档中心测试网预览\n\n使用文档中心实际页面，包含候选发布后的目录、侧栏和正文；尚未正式发布，链接与本次修订绑定。\n\n'+sites.map(site=>`- [${site.language==='zh'?'中文':'English'}：打开文档中心预期效果](${url(site.url)})\n`+site.redirects.map(link=>`  - [测试旧链接自动跳转：${label(link.from.split('/').slice(1).join('/'))}](${url(link.url)})`).join('\n')).join('\n');
   }
   const body=`${marker}\n### 文档维护状态：${result.status}\n\n${result.message}${links}\n\n候选修订：\`${pr.head.sha}\`\n\n[查看此次检查和执行记录](https://github.com/${repository}/actions/runs/${runId})`;
   let found;
