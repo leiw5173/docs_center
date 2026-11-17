@@ -27,7 +27,7 @@ async function reportStage(api,{repository,event,needs,runId}) {
     const url=text=>text.replace(/[()]/g,c=>c==='('?'%28':'%29');
     const label=text=>text.replace(/[\r\n`\[\]<>*\\]/g,' ');
     const change={added:'新增',modified:'修改',moved:'迁移'};
-    links='\n\n### 文档中心测试网预览\n\n以下链接直接打开本轮变更页面，包含文档中心实际侧栏和导航；尚未正式发布。\n\n'+sites.map(site=>`**${site.language==='zh'?'中文':'English'}：本次变更页面（${site.pages.length}）**\n\n`+(site.pages.length?site.pages.map(page=>`- [${label(page.title)} · ${label(page.path)}（${change[page.change]}）](${url(page.url)})`).join('\n'):'本轮无正文或路径变更。')+(site.redirects.length?'\n\n旧链接跳转测试：\n\n'+site.redirects.map(link=>`- [${label(link.from.split('/').slice(1).join('/'))}](${url(link.url)})`).join('\n'):'')).join('\n\n');
+    links='\n\n### 文档中心测试网预览\n\n以下链接直接打开本轮变更页面，包含文档中心实际侧栏和导航；尚未正式发布。\n\n'+sites.map(site=>`**${site.language==='zh'?'中文':'English'}：本次变更页面（${site.pages.length}）**\n\n`+(site.pages.length?site.pages.map(page=>`- [${label(page.title)} · ${label(page.path)}（${change[page.change]}）](${url(page.url)})`).join('\n'):'本轮仅目录配置或治理信息变更，没有独立正文页面需要预览。')+(site.redirects.length?'\n\n旧链接跳转测试：\n\n'+site.redirects.map(link=>`- [${label(link.from.split('/').slice(1).join('/'))}](${url(link.url)})`).join('\n'):'')).join('\n\n');
   }
   const body=`${marker}\n### 文档维护状态：${result.status}\n\n${result.message}${links}\n\n候选修订：\`${pr.head.sha}\`\n\n[查看此次检查和执行记录](https://github.com/${repository}/actions/runs/${runId})`;
   const commentsFound=[];
