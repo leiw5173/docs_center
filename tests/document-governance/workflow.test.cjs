@@ -68,6 +68,43 @@ test('empty or unsafe registry cannot silently produce green validation',()=>{
   assert.throws(()=>validateRegistry({schemaVersion:1,repositories:[]}),/Register/);assert.throws(()=>validateRegistry({schemaVersion:1,repositories:[{...registration,id:'..'}]}),/Invalid/);
 });
 test('heading suffixes match duplicate anchors',()=>{const r=analyze('# Same\n\n## Same\n');assert(r.anchors.has('same'));assert(r.anchors.has('same-1'));});
+test('front matter chapter numbers and empty sections are review items; code examples are not unfinished prose',t=>{
+  const f=fixture(t,{...good,'zh/guide.md':'---\ntitle: "6.1"\n---\n# Guide\n\n## 安装\n\n## Empty\n\n正文\n'});
+  const r=run(f);assert(r.warnings.some(w=>w.code==='numbered-title'));assert(r.warnings.some(w=>w.code==='content-review'));
+  const complete=fixture(t,{...good,'zh/guide.md':'# Guide\n\n## 安装\n\n正文\n\n```\nTODO 待补充\n```\n'});
+  assert(!run(complete).warnings.some(w=>w.file==='zh/guide.md'&&w.code==='content-review'));
+});
+test('eight-category report keeps blockers, translation reminders, and first-onboarding limits visible',t=>{
+  const f=fixture(t,{...good,'zh/guide.md':'# 6.1 Guide\n\n3. 待补充\n\n[坏链接](#不存在)\n','zh/child/page.md':'# Page\n\n正文'});
+  const r=run(f),out=path.join(f.root,'report');writePreview(r,out);
+  const report=JSON.parse(fs.readFileSync(path.join(out,'report.json')));
+  assert.equal(report.checks.length,8);assert.equal(report.hasBaseline,false);
+  assert.equal(report.checks.find(c=>c.id==='links').status,'blocked');
+  assert.equal(report.checks.find(c=>c.id==='directories').status,'blocked');
+  assert.equal(report.checks.find(c=>c.id==='translations').status,'review');
+  assert(!report.errors.some(e=>e.code==='translation'));
+  const summary=fs.readFileSync(path.join(out,'report.md'),'utf8');
+  assert(summary.includes('无上一清单'));assert(summary.includes('零自动发现不代表人工审核通过'));
+  assert(fs.readFileSync(path.join(out,'index.html'),'utf8').includes('版本与旧版归档'));
+});
+test('review report shows incoming transitive references including removed edges, unchanged versions, and address migrations',t=>{
+  const files={'zh/index.md':'# Index\n\n[a](a.md)','zh/a.md':'# A\n\n[b](b.md)','zh/b.md':'# B\n\n正文','zh/old.md':'# Old\n\n旧文'};
+  const f=fixture(t,files),previous=run(f).manifest;
+  fs.writeFileSync(path.join(f.root,'zh/a.md'),'# A\n\n不再引用 B');
+  fs.writeFileSync(path.join(f.root,'zh/b.md'),'# B\n\n新正文');
+  fs.renameSync(path.join(f.root,'zh/old.md'),path.join(f.root,'zh/new.md'));
+  f.git('add','.');f.git('-c','user.name=Test','-c','user.email=test@example.invalid','commit','--quiet','-m','update');f.commit=f.git('rev-parse','HEAD');
+  const r=run(f,{previous,overrides:{redirects:{'test/zh/old.md':'test/zh/new.md'}}});
+  const {checkReport}=require('../../scripts/document-governance/check-report.cjs');
+  const report=checkReport(r),impact=report.referenceImpact.find(i=>i.document==='test/zh/b.md');
+  assert.deepEqual(impact.direct,['test/zh/a.md']);assert.deepEqual(impact.indirect,['test/zh/index.md']);
+  assert(report.versionReview.some(v=>v.document==='test/zh/b.md'&&v.previousVersion===null&&v.candidateVersion===null));
+  assert.deepEqual(report.addresses.added,['test/zh/new.md']);assert.deepEqual(report.addresses.removed,['test/zh/old.md']);
+  assert.equal(report.addresses.redirects['test/zh/old.md'],'test/zh/new.md');
+  const {selectGroup}=require('../../scripts/document-governance/groups.cjs');
+  assert.equal(checkReport(selectGroup(r,{repositories:['test'],groupId:'test'})).hasBaseline,true);
+  assert.equal(JSON.stringify(r.manifest).includes('referenceImpact'),false);
+});
 test('out-of-order source events cannot supersede a newer candidate; divergent histories require review',t=>{
   const f=fixture(t,good),before=f.commit;fs.writeFileSync(path.join(f.root,'zh/guide.md'),'# New body');f.git('add','.');f.git('-c','user.name=Test','-c','user.email=test@example.invalid','commit','--quiet','-m','next');const next=f.git('rev-parse','HEAD');
   assert.equal(compareCandidate(f.root,before,next),'ahead');assert.equal(compareCandidate(f.root,next,before),'stale');assert.equal(compareCandidate(f.root,next,next),'identical');

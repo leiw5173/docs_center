@@ -13,6 +13,41 @@ concurrency:
   group: document-governance-${{ github.event.client_payload.repository || github.event.issue.number || github.event.pull_request.number || github.run_id }}
   cancel-in-progress: false
 jobs:
+  manual-checks:
+    name: document-manual-checks
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - name: Check accepted immutable manifests and build reports
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=0
+          failed=0
+          while IFS= read -r -d '' manifest; do
+            relative="${manifest#document-center/releases/}"
+            output="$RUNNER_TEMP/document-preview/${relative%.json}"
+            count=$((count + 1))
+            if ! node scripts/document-governance/run.cjs check --manifest "$manifest" --output "$output"; then
+              failed=1
+            fi
+          done < <(find document-center/releases -type f -name '*.json' -print0 | sort -z)
+          if [ "$count" -eq 0 ]; then echo 'No accepted release manifests to check'; exit 1; fi
+          exit "$failed"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: document-manual-preview-${{ github.sha }}
+          path: ${{ runner.temp }}/document-preview
+          if-no-files-found: ignore
+          retention-days: 14
   registration:
     if: github.event_name == 'issues' && startsWith(github.event.issue.title, '[文档接入]')
     runs-on: ubuntu-latest

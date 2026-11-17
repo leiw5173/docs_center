@@ -164,6 +164,7 @@ async function check(registry,temp,fileOverride=null,outputOverride=null) {
   const stable=m=>{const {warnings,...rest}=m;return rest;};
   if(JSON.stringify(stable(input))!==JSON.stringify(stable(result.manifest)))result.errors.push({code:'manifest-mismatch',message:'Registry or immutable source differs from reviewed manifest'});
   const out=path.resolve(outputOverride||argument('--output',path.join(os.tmpdir(),'document-preview')));writePreview(result,out);
+  if(process.env.GITHUB_STEP_SUMMARY)fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,fs.readFileSync(path.join(out,'report.md')));
   fs.writeFileSync(path.join(out,'manifest.json'),JSON.stringify(input,null,2));
   for(const error of result.errors)console.error(JSON.stringify(error));
   console.log(JSON.stringify({manifestDigest:sha(JSON.stringify(input)),errors:result.errors.length,warnings:input.warnings.length,preview:out}));
