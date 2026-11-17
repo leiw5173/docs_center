@@ -8,7 +8,7 @@ function checkReport(result) {
     ['versions','版本与旧版归档',['version'],'逐项确认是否需要升级软件版本、保留旧版并完成归档；检查不会自动升级或归档。'],
     ['translations','中英文缺失',['translation'],'缺少对应语言仅提醒，不阻断当前语言发布。'],
     ['directories','目录介绍',['index'],'每个含文档的目录须有 index.md；介绍、目录链接及排序需人工核对。'],
-    ['addresses','文档地址变更',['address-change','redirect'],'核对删除和新增地址是否为迁移，补充 redirects；不自动猜测重命名。']
+    ['addresses','文档地址变更',['address-change','redirect','address-migration-required'],'确定的迁移自动登记并在发布后跳转；无法唯一确定目标的旧地址阻断发布。']
   ];
   const documents=m=>new Map((m?.scopes||[]).flatMap(s=>s.documents.map(d=>[`${s.repoId}/${d.path}`,d])));
   const before=documents(result.previous),after=documents(result.manifest);
@@ -60,4 +60,24 @@ function reportMarkdown(report) {
   for(const [from,to]of Object.entries(report.addresses.redirects))lines.push(`- 迁移登记：${text(from)} → ${text(to)}`);
   return lines.join('\n')+'\n';
 }
-module.exports={checkReport,reportMarkdown};
+function migrationMarkdown(result,repository) {
+  const report=checkReport(result),removed=report.addresses.removed;
+  if(!removed.length)return '';
+  const safe=s=>String(s).replace(/[\r\n|`<>\[\]\\*]/g,' ');
+  const docs=result.manifest.scopes.flatMap(s=>s.documents.map(d=>({id:`${s.repoId}/${d.path}`,title:d.title,path:d.path})));
+  const lines=['### ⚠️ 文档地址变更','', '| 旧路径 | 新路径 / 处理状态 |','| --- | --- |'];
+  for(const from of removed) {
+    const to=report.addresses.redirects[from];
+    lines.push(`| ${safe(from)} | ${to?`${safe(to)}（已登记，发布后自动跳转）`:'**未确定目标，阻断发布**'} |`);
+    if(!to&&/^[\w-]+\/[\w.-]+$/.test(repository||'')) {
+      const candidates=docs.filter(d=>d.id.split('/')[0]===from.split('/')[0]).sort((a,b)=>Number(b.path.split('/').at(-1)===from.split('/').at(-1))-Number(a.path.split('/').at(-1)===from.split('/').at(-1))).slice(0,8);
+      for(const doc of candidates) {
+        const params=new URLSearchParams({template:'document-governance.yml',title:'[文档治理] 确认旧链接的新位置',language:result.manifest.language,operation:'地址迁移',target:from,content:doc.id});
+        lines.push(`\n选择新位置：[${safe(doc.title)} · ${safe(doc.path)}](https://github.com/${repository}/issues/new?${params})（已填好，核对后提交）\n`);
+      }
+    }
+  }
+  lines.push('','自动识别只登记可确定的同来源迁移；历史旧地址会继续指向最新地址。请核对表格后确认发布，无需手填文档标识。');
+  return lines.join('\n');
+}
+module.exports={checkReport,reportMarkdown,migrationMarkdown};

@@ -146,6 +146,8 @@ jobs:
           retention-days: 14
   backend-preview:
     name: document-release-preview
+    outputs:
+      preview_sites: ${{ steps.staging.outputs.preview_sites }}
     needs: preview
     if: always() && needs.preview.result == 'success' && github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
@@ -160,6 +162,7 @@ jobs:
           node-version: '22'
       - run: npm ci --ignore-scripts
       - name: Request backend staging artifact
+        id: staging
         if: startsWith(github.head_ref, 'document-release/') || startsWith(github.head_ref, 'document-registration/')
         run: node scripts/document-governance/run.cjs backend-preview --output "$RUNNER_TEMP/backend-preview/preview.zip"
         env:

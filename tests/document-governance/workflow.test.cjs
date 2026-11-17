@@ -74,6 +74,14 @@ test('front matter chapter numbers and empty sections are review items; code exa
   const complete=fixture(t,{...good,'zh/guide.md':'# Guide\n\n## 安装\n\n正文\n\n```\nTODO 待补充\n```\n'});
   assert(!run(complete).warnings.some(w=>w.file==='zh/guide.md'&&w.code==='content-review'));
 });
+test('Git rename evidence preserves a moved and lightly edited document and missing mappings block',t=>{
+  const f=fixture(t,{...good,'zh/guide.md':good['zh/guide.md']+'\n这是保留的使用指南说明。\n'.repeat(20)}),previous=run(f).manifest;
+  fs.renameSync(path.join(f.root,'zh/guide.md'),path.join(f.root,'zh/renamed.md'));
+  fs.appendFileSync(path.join(f.root,'zh/renamed.md'),'\n补充。\n');
+  fs.writeFileSync(path.join(f.root,'zh/index.md'),good['zh/index.md'].replace('guide.md','renamed.md'));
+  f.git('add','.');f.git('-c','user.name=Test','-c','user.email=test@example.invalid','commit','--quiet','-m','rename');f.commit=f.git('rev-parse','HEAD');
+  const result=run(f,{previous});assert.deepEqual(result.errors,[]);assert.equal(result.manifest.redirects['test/zh/guide.md'],'test/zh/renamed.md');
+});
 test('eight-category report keeps blockers, translation reminders, and first-onboarding limits visible',t=>{
   const f=fixture(t,{...good,'zh/guide.md':'# 6.1 Guide\n\n3. 待补充\n\n[坏链接](#不存在)\n','zh/child/page.md':'# Page\n\n正文'});
   const r=run(f),out=path.join(f.root,'report');writePreview(r,out);
