@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "language": "zh",
+  "scopes": [
+    {
+      "repoId": "maintenance-test",
+      "repository": "leiw5173/docs_test",
+      "prefix": "maintenance-test",
+      "rootDep": 1,
+      "column": "cases",
+      "parentNavigationId": "cases/cases-teaching-practice",
+      "navigationPath": [
+        "应用案例",
+        "教学与实践"
+      ],
+      "language": "zh",
+      "commit": "f773b935960f379efe3525e9aa2297f481996614",
+      "documents": [
+        {
+          "path": "zh/guide/index.md",
+          "sha256": "bbf631b9fb35e67f6be456c36da98401b4ecf1ad3890f6feb010a8ff4ea67de7",
+          "title": "测试指南",
+          "sidebarPosition": 1,
+          "softwareVersion": null,
+          "references": [
+            "maintenance-test/zh/guide/steps.md",
+            "maintenance-test/zh/index.md"
+          ]
+        },
+        {
+          "path": "zh/guide/steps.md",
+          "sha256": "b5d0e342dc46696b8325a1f194d8a134322c4605708041059e485a82fed9e6f6",
+          "title": "维护流程测试步骤",
+          "sidebarPosition": 2,
+          "softwareVersion": "test-1.0",
+          "references": [
+            "maintenance-test/zh/guide/index.md"
+          ]
+        },
+        {
+          "path": "zh/index.md",
+          "sha256": "02cdc385b6ae1901cfb114565e61a1bb1f51bc8e57a7fd41521fe0a839573d4b",
+          "title": "维护流程测试文档",
+          "sidebarPosition": 1,
+          "softwareVersion": null,
+          "references": [
+            "maintenance-test/zh/guide/index.md"
+          ]
+        }
+      ],
+      "assets": [
+        {
+          "path": "zh/images/flow.svg",
+          "sha256": "b50e8b3b1ce1241ba0dbb1082f9b84ba251acb87bbe25e81b26b3eeebc03d86a"
+        }
+      ]
+    }
+  ],
+  "references": {},
+  "redirects": {},
+  "labels": {},
+  "feedback": [],
+  "reviewRequired": [
+    "content-completeness",
+    "references",
+    "version-archive",
+    "translations",
+    "directory-order",
+    "address-migration"
+  ],
+  "warnings": [
+    {
+      "repo": "maintenance-test",
+      "file": "zh/guide/index.md",
+      "code": "translation",
+      "message": "Other language counterpart is missing; release remains independent"
+    },
+    {
+      "repo": "maintenance-test",
+      "file": "zh/guide/steps.md",
+      "code": "translation",
+      "message": "Other language counterpart is missing; release remains independent"
+    },
+    {
+      "repo": "maintenance-test",
+      "file": "zh/index.md",
+      "code": "translation",
+      "message": "Other language counterpart is missing; release remains independent"
+    }
+  ],
+  "groupId": "g-f3ab12cbbdd16d6d6ea6",
+  "groupRepositories": [
+    "maintenance-test"
+  ]
+}
