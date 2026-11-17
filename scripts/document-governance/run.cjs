@@ -298,13 +298,27 @@ async function backendPreview() {
   const base=process.env.DOCUMENT_PREVIEW_URL,token=process.env.DOCUMENT_PREVIEW_TOKEN;
   if(!base||!token)throw Error('Backend candidate preview environment is not configured');
   const url=new URL('/admin/documents/previews',base);if(url.protocol!=='https:')throw Error('Preview endpoint must use HTTPS');
+  const sites=[];
   for(const manifest of manifests){
     const response=await fetch(url,{method:'POST',redirect:'error',headers:{'Content-Type':'application/json','X-Document-Preview-Token':token},body:JSON.stringify(onboarding?{registration,manifest}:manifest),signal:AbortSignal.timeout(120000)});
     if(!response.ok||!response.headers.get('content-type')?.includes('application/zip'))throw Error(`Backend preview failed: HTTP ${response.status}`);
     const chunks=[];let size=0;for await(const chunk of response.body){size+=chunk.length;if(size>128*1024*1024)throw Error('Preview exceeds 128 MiB');chunks.push(chunk);}
     const configured=argument('--output',path.join(os.tmpdir(),'backend-preview.zip'));const out=onboarding?path.join(path.dirname(path.resolve(configured)),`onboarding-${manifest.language}.zip`):configured;
     fs.mkdirSync(path.dirname(out),{recursive:true});fs.writeFileSync(out,Buffer.concat(chunks));
+    const digest=sha(JSON.stringify(manifest)),siteUrl=response.headers.get('x-document-preview-url');
+    if(!siteUrl)throw Error('Candidate artifact exists but test site was not deployed');
+    const redirects=Object.entries(manifest.redirects||{}).slice(0,4).map(([from,to])=>({from,to,url:new URL(from.split('/').map(encodeURIComponent).join('/')+'.html',siteUrl).href}));
+    const site={language:manifest.language,digest,url:siteUrl,redirects};require('./preview-sites.cjs').previewSites([site]);
+    const deployed=await fetch(siteUrl,{redirect:'error',signal:AbortSignal.timeout(30000)});
+    if(!deployed.ok||!deployed.headers.get('content-type')?.includes('text/html')||deployed.headers.get('x-document-preview-digest')!==digest)throw Error('Deployed test site is not accessible or belongs to another candidate');
+    for(const link of redirects) {
+      const probe=await fetch(link.url,{redirect:'manual',signal:AbortSignal.timeout(30000)});
+      const expected=new URL(link.to.split('/').map(encodeURIComponent).join('/')+'.html',siteUrl);
+      if(probe.status!==302||new URL(probe.headers.get('location')||'',link.url).href!==expected.href)throw Error('Old-link preview did not redirect to the reviewed target');
+    }
+    sites.push(site);
   }
+  if(process.env.GITHUB_OUTPUT)fs.appendFileSync(process.env.GITHUB_OUTPUT,`preview_sites=${JSON.stringify(sites)}\n`);
   console.log(`Backend preview created for PR head ${pr.head.sha}`);
 }
 async function main(){

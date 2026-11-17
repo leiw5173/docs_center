@@ -11,6 +11,7 @@ function stageStatus(event,needs) {
   if(event.pull_request?.head.ref.startsWith('document-registration/')&&needs['registration-access']?.result!=='success')return {status:'接入检查失败',message:'请检查来源仓库、分支、语言和分类信息；接入检查通过后再进行首版内容检查与预览。'};
   if(needs.preview?.result!=='success')return {status:'检查失败',message:'正文、资源、目录链接问题回业务仓库修正；分类、迁移与引用登记通过治理 Issue 补充。内容检查已运行时，在工作流摘要及 document-preview Artifact 的 report.md 查看八类逐项结果。'};
   if(needs['backend-preview']?.result!=='success')return {status:'预览未通过',message:'请查看预览工作流记录并协调修正，保持此 PR 待确认。'};
+  try{require('./preview-sites.cjs').previewSites(needs['backend-preview']?.outputs?.preview_sites);}catch{return {status:'测试预览未就绪',message:'尚未取得可访问的候选测试网链接，保持此 PR 待确认；不能将附件生成成功视为测试部署完成。'};}
   return {status:'待文档团队确认',message:'自动检查和预览通过，请核对内容、引用关联组、目录子类、语言及版本归档后手动合并。八类逐项结果见工作流摘要及 document-preview Artifact 的 report.md；提醒仍需人工确认。'};
 }
 async function reportStage(api,{repository,event,needs,runId}) {
@@ -20,7 +21,14 @@ async function reportStage(api,{repository,event,needs,runId}) {
   if(current.head.sha!==pr.head.sha)return; // An old run cannot overwrite the latest candidate's state.
   const result=stageStatus(event,needs);if(!result)return;
   const marker=`<!-- document-governance-stage:${pr.head.sha} -->`;
-  const body=`${marker}\n### 文档维护状态：${result.status}\n\n${result.message}\n\n候选修订：\`${pr.head.sha}\`\n\n[查看此次检查和执行记录](https://github.com/${repository}/actions/runs/${runId})`;
+  let links='';
+  if(result.status==='待文档团队确认') {
+    const sites=require('./preview-sites.cjs').previewSites(needs['backend-preview'].outputs.preview_sites);
+    const url=text=>text.replace(/[()]/g,c=>c==='('?'%28':'%29');
+    const label=text=>text.replace(/[\r\n`\[\]<>*\\]/g,' ');
+    links='\n\n### 测试网预览\n\n候选内容，尚未正式发布；链接与本次修订绑定。\n\n'+sites.map(site=>`- [${site.language==='zh'?'中文':'English'}：打开候选预览](${url(site.url)})\n`+site.redirects.map(link=>`  - [测试旧链接自动跳转：${label(link.from.split('/').slice(1).join('/'))}](${url(link.url)})`).join('\n')).join('\n');
+  }
+  const body=`${marker}\n### 文档维护状态：${result.status}\n\n${result.message}${links}\n\n候选修订：\`${pr.head.sha}\`\n\n[查看此次检查和执行记录](https://github.com/${repository}/actions/runs/${runId})`;
   let found;
   for(let page=1;page<=20;page++) {
     const comments=await api(`/repos/${repository}/issues/${pr.number}/comments?per_page=100&page=${page}`);
