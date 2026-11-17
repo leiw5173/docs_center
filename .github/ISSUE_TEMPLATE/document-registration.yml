@@ -5,8 +5,8 @@ body:
   - type: markdown
     attributes:
       value: >-
-        请先阅读[接入填写指南](https://github.com/leiw5173/docs_center/blob/main/docs/repository-registration.md)和[分类目录表](https://github.com/leiw5173/docs_center/blob/main/docs/category-catalog.md)。只登记来源，不直接发布正文。无需填写栏目代码、子类
-        ID、地址前缀或目录层级。
+        请先阅读[接入填写指南](https://github.com/leiw5173/docs_center/blob/main/docs/repository-registration.md)和[分类目录表](https://github.com/leiw5173/docs_center/blob/main/docs/category-catalog.md)。接入
+        PR 包含登记和首版内容，检查及预览通过后确认合并。无需填写栏目代码、子类 ID、地址前缀或目录层级。
   - type: input
     id: repository
     attributes:
@@ -71,4 +71,6 @@ body:
       placeholder: 通常留空
   - type: markdown
     attributes:
-      value: 提交后请在自动生成的 PR 中核对分类、来源标识和地址。新接入的地址前缀默认等于来源标识；已有来源保留原前缀及目录层级。调整显示位置不会自动迁移地址。
+      value: >-
+        提交后请在自动生成的 PR 中核对分类、来源标识和地址。新接入的地址前缀默认等于来源标识；已有来源保留原前缀及目录层级。接入检查和首版内容预览通过后，只需确认合并这一个
+        PR；合并后统一登记并发布，调整显示位置不会自动迁移地址。

@@ -20,12 +20,12 @@
 
 ## 日常维护
 
-1. **接入或调整来源**：先看[接入填写指南](docs/repository-registration.md)及[分类目录表](docs/category-catalog.md)，再提交[文档仓库接入或调整](https://github.com/leiw5173/docs_center/issues/new?template=document-registration.yml)申请。填写来源仓库、语言并选择中文目标分类；来源标识和地址自动生成或沿用，由文档团队核对登记 PR。
+1. **接入或调整来源**：先看[接入填写指南](docs/repository-registration.md)及[分类目录表](docs/category-catalog.md)，再提交[文档仓库接入或调整](https://github.com/leiw5173/docs_center/issues/new?template=document-registration.yml)申请。填写来源仓库、语言并选择中文目标分类；来源标识和地址自动生成或沿用，接入 PR 同时包含来源登记与首版清单，接入检查、内容检查和预览通过后，由文档团队确认并只合并一次。
 2. **更新文档内容**：在对应业务仓库修改正文、资源、目录 `index.md` 和排序信息，按该仓库规则提交、合并 PR；在本仓库跟进对应的候选发布 PR。
 3. **处理检查问题**：查看 PR 检查报告和预览。正文、资源、目录链接问题回业务仓库修正；地址迁移、引用、标签或反馈通过[治理信息表单](https://github.com/leiw5173/docs_center/issues/new?template=document-governance.yml)补充。一般问题也可提交[文档反馈](https://github.com/leiw5173/docs_center/issues/new?template=document-feedback.yml)。
 4. **确认发布清单**：文档团队核对内容完整性、引用影响、语言状态、目录排序、预览及版本归档，确认检查通过后手动合并发布 PR。
 
-来源登记不等于发布。是否可以发布，以相应 PR 的检查结果和文档团队确认为准。
+提交接入申请不等于发布。新接入在同一个 PR 中完成登记和首版审核，合并后统一执行；日常更新继续通过候选发布 PR 确认。
 
 目录子类随登记和候选清单维护。发布以仓库为最小单位，按直接、间接文档引用组成关联组；同组复用待发布 PR，不同组独立审核。检查状态和最终发布结果回写到相应 PR，任务受理不等于发布完成。
 

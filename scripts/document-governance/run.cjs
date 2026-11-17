@@ -5,6 +5,7 @@ const {execFileSync}=require('node:child_process');
 const {build,writePreview,validateRegistry,snapshot,sha,git,compareCandidate}=require('./core.cjs');
 const {referenceGroups,selectGroup,releaseLocation,parseReleaseBranch,acceptedState,scopeFingerprint,affectedRepositories}=require('./groups.cjs');
 const {registrationFromIssue}=require('./registration.cjs');
+const {onboardingFile,validateOnboarding,buildOnboarding,onboardingFiles}=require('./onboarding.cjs');
 const root=path.resolve(__dirname,'../..');
 const read=file=>JSON.parse(fs.readFileSync(file,'utf8'));
 const encode=value=>encodeURIComponent(value);
@@ -87,6 +88,7 @@ async function candidate(registry,temp,attempt=0,sourceOverride=null) {
   if(!/^[\w-]+\/[\w.-]+$/.test(repo||''))throw Error('Invalid governance repository');
   for(const language of incoming.languages) {
     const previous=acceptedState(root,language),pending=await listCandidates(repo,language);
+    const onboarding=await listOnboardingCandidates(repo,language),reserved=affectedRepositories([incoming.id],onboarding);if(onboarding.some(p=>p.manifest.scopes.some(s=>reserved.has(s.repoId))))throw Error('Related source has an onboarding PR pending; refresh that PR before generating a separate candidate');
     const overrides={references:{...previous.references},redirects:{...previous.redirects},labels:{...previous.labels},feedback:[...previous.feedback]};
     for(const p of [...pending].sort((a,b)=>a.pr.number-b.pr.number)) {
       for(const key of ['references','redirects','labels'])Object.assign(overrides[key],p.manifest[key]||{});
@@ -143,8 +145,8 @@ function baseState(language) {
   const listBase=dir=>git(root,'ls-tree','-r','--name-only',ref,'--',dir).toString().trim().split('\n').filter(Boolean);
   return acceptedState(root,language,readBase,listBase);
 }
-async function check(registry,temp) {
-  const file=argument('--manifest');if(!file)throw Error('--manifest is required');
+async function check(registry,temp,fileOverride=null,outputOverride=null) {
+  const file=fileOverride||argument('--manifest');if(!file)throw Error('--manifest is required');
   const input=read(path.resolve(root,file)),selectedIds=new Set(input.scopes.map(s=>s.repoId));
   const selectedRegistry={schemaVersion:1,repositories:registry.repositories.filter(r=>selectedIds.has(r.id))};
   if(selectedRegistry.repositories.length!==selectedIds.size||input.scopes.length!==selectedIds.size)throw Error('Duplicate or unregistered scope');
@@ -161,31 +163,67 @@ async function check(registry,temp) {
   }
   const stable=m=>{const {warnings,...rest}=m;return rest;};
   if(JSON.stringify(stable(input))!==JSON.stringify(stable(result.manifest)))result.errors.push({code:'manifest-mismatch',message:'Registry or immutable source differs from reviewed manifest'});
-  const out=path.resolve(argument('--output',path.join(os.tmpdir(),'document-preview')));writePreview(result,out);
+  const out=path.resolve(outputOverride||argument('--output',path.join(os.tmpdir(),'document-preview')));writePreview(result,out);
   fs.writeFileSync(path.join(out,'manifest.json'),JSON.stringify(input,null,2));
   for(const error of result.errors)console.error(JSON.stringify(error));
   console.log(JSON.stringify({manifestDigest:sha(JSON.stringify(input)),errors:result.errors.length,warnings:input.warnings.length,preview:out}));
   if(result.errors.length)process.exitCode=1;
 }
-async function registration(registry) {
-  const event=read(process.env.GITHUB_EVENT_PATH),issue=event.issue,repo=process.env.GITHUB_REPOSITORY;
+async function registration(registry,options={}) {
+  const event=read(process.env.GITHUB_EVENT_PATH),issue=options.issue||event.issue,repo=process.env.GITHUB_REPOSITORY;
   if(!issue||!issue.title.startsWith('[文档接入]'))return;
   await authorizeMaintainer(repo,issue.user.login);
-  const entry=registrationFromIssue(issue.body||'',registry);
-  const updated={schemaVersion:1,change:{repositoryId:entry.id},repositories:[...registry.repositories.filter(r=>r.id!==entry.id),entry].sort((a,b)=>a.id.localeCompare(b.id))};validateRegistry(updated);
-  const branch=`document-registration/issue-${issue.number}`,repository=await api(`/repos/${repo}`);
+  const entry=options.entry||registrationFromIssue(issue.body||'',registry);
+  if(registry.repositories.some(r=>r.id===entry.id&&r.repository!==entry.repository))throw Error('Source identity is already owned by another repository');
+  const branch=`document-registration/issue-${issue.number}`,file=onboardingFile(branch);
+  const updated={schemaVersion:1,change:{repositoryId:entry.id,onboarding:file},repositories:[...registry.repositories.filter(r=>r.id!==entry.id),entry].sort((a,b)=>a.id.localeCompare(b.id))};validateRegistry(updated);
+  const repository=await api(`/repos/${repo}`),base=(await api(`/repos/${repo}/git/ref/heads/${encode(repository.default_branch)}`)).object.sha;
+  if(base!==git(root,'rev-parse','HEAD').toString().trim())throw Error('主分支已更新，请重试接入申请');
   const prs=await api(`/repos/${repo}/pulls?state=open&head=${encode(repo.split('/')[0]+':'+branch)}`);
-  if(!prs.length){
-    const ref=await api(`/repos/${repo}/git/ref/heads/${encode(repository.default_branch)}`);
-    const refs=await api(`/repos/${repo}/git/matching-refs/heads/${branch}`);
-    if(refs.some(r=>r.ref===`refs/heads/${branch}`))await api(`/repos/${repo}/git/refs/heads/${branch}`,'PATCH',{sha:ref.object.sha,force:true});
-    else await api(`/repos/${repo}/git/refs`,'POST',{ref:`refs/heads/${branch}`,sha:ref.object.sha});
-  }
-  const previous=await api(`/repos/${repo}/contents/document-center/registry.json?ref=${encode(branch)}`);
-  await api(`/repos/${repo}/contents/document-center/registry.json`,'PUT',{branch,message:`docs: register ${entry.repository}`,sha:previous.sha,content:Buffer.from(JSON.stringify(updated,null,2)+'\n').toString('base64')});
-  const body=`来自接入申请 #${issue.number}。\n\n| 核对项 | 申请结果 |\n| --- | --- |\n| 来源 | ${entry.repository} |\n| 来源标识 | ${entry.id} |\n| 分支 / 语言 | ${entry.branch} / ${entry.languages.join(', ')} |\n| 目标分类 | ${(entry.navigationPath||[entry.column]).join(' / ')} |\n| 地址前缀 | ${entry.prefix} |\n\n新来源标识和地址前缀默认自动生成；已有来源自动沿用原值。请按[接入填写指南](https://github.com/${repo}/blob/main/docs/repository-registration.md)核对分类与地址。该 PR 仅登记来源，不发布正文。\n\nCloses #${issue.number}`;
+  let priorBundle=options.bundle;
+  if(!priorBundle&&prs.length){try{const old=await api(`/repos/${repo}/contents/${file}?ref=${prs[0].head.sha}`);priorBundle=JSON.parse(Buffer.from(old.content,'base64').toString());}catch(error){if(error.httpStatus!==404)throw error;}}
+  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'document-onboarding-'));
+  let bundle;
+  try{
+    const roots={},revisions={};
+    bundle=await buildOnboarding({registry:updated,entry,previousFor:language=>acceptedState(root,language),overridesFor:(language,previous)=>{const pending=priorBundle?.releases.find(m=>m.language===language);if(!pending)return previous;return {...previous,references:{...previous.references,...pending.references},redirects:{...previous.redirects,...pending.redirects},labels:{...previous.labels,...pending.labels},feedback:pending.feedback||previous.feedback};},load:async selected=>{
+      const missing=selected.filter(r=>!roots[r.id]);if(missing.length)Object.assign(roots,cloneSources({repositories:missing},revisions,fs.mkdtempSync(path.join(temp,'sources-'))));
+      return {roots,revisions};
+    }});
+    for(const manifest of bundle.releases){const previous=acceptedState(root,manifest.language);for(const old of [...previous.scopes,...(priorBundle?.releases.find(m=>m.language===manifest.language)?.scopes||[])]){const fresh=manifest.scopes.find(s=>s.repoId===old.repoId);if(!fresh||old.commit===fresh.commit)continue;const registered=updated.repositories.find(r=>r.id===old.repoId);execFileSync('git',['-C',roots[old.repoId],'fetch','--quiet',`https://github.com/${registered.repository}.git`,old.commit],{stdio:'pipe'});if(compareCandidate(roots[old.repoId],old.commit,fresh.commit)!=='ahead')throw Error('Source history regressed or diverged');}}
+    for(const language of entry.languages){const pending=[...await listCandidates(repo,language),...await listOnboardingCandidates(repo,language)].filter(p=>p.pr.head.ref!==branch);if(pending.some(p=>p.manifest.scopes.some(s=>bundle.releases.find(m=>m.language===language).scopes.some(n=>n.repoId===s.repoId))))throw Error('关联来源已有待审核 PR，请先处理或关闭该候选后重试接入');}
+    const currentBase=await api(`/repos/${repo}/git/ref/heads/${encode(repository.default_branch)}`);if(currentBase.object.sha!==base)throw Error('主分支已更新，请重试接入申请');
+    const refs=await api(`/repos/${repo}/git/matching-refs/heads/${branch}`),ref=refs.find(r=>r.ref===`refs/heads/${branch}`);
+    if(prs.length&&ref?.object.sha!==prs[0].head.sha)throw Error('接入 PR 已被并发更新，请重试');
+    const parent=await api(`/repos/${repo}/git/commits/${base}`);
+    const tree=await api(`/repos/${repo}/git/trees`,'POST',{base_tree:parent.tree.sha,tree:Object.entries(onboardingFiles(updated,bundle,file)).map(([file,content])=>({path:file,mode:'100644',type:'blob',content}))});
+    const commit=await api(`/repos/${repo}/git/commits`,'POST',{message:`docs: onboard ${entry.repository} with reviewed initial releases`,tree:tree.sha,parents:[...new Set([...(ref?[ref.object.sha]:[]),base])]});
+    if(ref)await api(`/repos/${repo}/git/refs/heads/${branch}`,'PATCH',{sha:commit.sha,force:false});
+    else await api(`/repos/${repo}/git/refs`,'POST',{ref:`refs/heads/${branch}`,sha:commit.sha});
+  }finally{fs.rmSync(temp,{recursive:true,force:true});}
+  const body=`来自接入申请 #${issue.number}。\n\n| 核对项 | 申请结果 |\n| --- | --- |\n| 来源 | ${entry.repository} |\n| 来源标识 | ${entry.id} |\n| 分支 / 语言 | ${entry.branch} / ${entry.languages.join(', ')} |\n| 目标分类 | ${(entry.navigationPath||[entry.column]).join(' / ')} |\n| 地址前缀 | ${entry.prefix} |\n\n新来源标识和地址前缀默认自动生成；已有来源自动沿用原值。请按[接入填写指南](https://github.com/${repo}/blob/main/docs/repository-registration.md)核对分类与地址。该 PR 同时包含来源登记与首版固定清单。接入检查、内容检查和预览通过后，由文档团队确认并只合并一次；合并后统一登记和发布，最终结果回报到本 PR。\n\nCloses #${issue.number}`;
   if(prs.length)await api(`/repos/${repo}/pulls/${prs[0].number}`,'PATCH',{body});
-  else await api(`/repos/${repo}/pulls`,'POST',{title:`登记文档仓库 ${entry.repository}`,head:branch,base:repository.default_branch,body});
+  else await api(`/repos/${repo}/pulls`,'POST',{title:`接入并首次发布 ${entry.repository}`,head:branch,base:repository.default_branch,body});
+}
+async function checkOnboarding(registry,temp){
+ const event=read(process.env.GITHUB_EVENT_PATH),file=onboardingFile(event.pull_request.head.ref);
+ if(registry.change?.onboarding!==file)throw Error('Onboarding file differs from registration branch');
+ const bundle=read(path.join(root,file));validateOnboarding(registry,bundle);
+ const out=path.resolve(argument('--output',path.join(os.tmpdir(),'document-preview')));
+ for(const manifest of bundle.releases){const canonical=releaseLocation(manifest.language,manifest.groupId).file;if(JSON.stringify(read(path.join(root,canonical)))!==JSON.stringify(manifest))throw Error('Onboarding manifest differs from canonical release');await check(registry,temp,canonical,path.join(out,manifest.language));}
+}
+async function listOnboardingCandidates(repo,language){
+ const result=[];
+ for(let page=1;page<=20;page++){
+  const prs=await api(`/repos/${repo}/pulls?state=open&per_page=100&page=${page}`);
+  for(const pr of prs){if(pr.head.repo?.full_name!==repo||!/^document-registration\/issue-[1-9][0-9]*$/.test(pr.head.ref))continue;
+   const load=async file=>{const c=await api(`/repos/${repo}/contents/${file}?ref=${pr.head.sha}`);return JSON.parse(Buffer.from(c.content,'base64').toString());};
+   const registration=await load('document-center/registry.json'),file=onboardingFile(pr.head.ref);if(registration.change?.onboarding!==file)continue;
+   const bundle=await load(file);validateOnboarding(registration,bundle);const manifest=bundle.releases.find(m=>m.language===language);if(manifest)result.push({pr,registration,bundle,manifest,location:{branch:pr.head.ref,file:releaseLocation(language,manifest.groupId).file}});
+  }
+  if(prs.length<100)return result;
+ }
+ throw Error('Too many open onboarding PRs');
 }
 async function governanceChange(attempt=0) {
   const event=read(process.env.GITHUB_EVENT_PATH),issue=event.issue,repo=process.env.GITHUB_REPOSITORY;
@@ -196,7 +234,7 @@ async function governanceChange(attempt=0) {
   const value=name=>(fields[name]||'').trim();const language=value('发布语言');
   if(!['zh','en'].includes(language))throw Error('Invalid release language');
   const target=value('文档标识');
-  const choices=(await listCandidates(repo,language)).filter(p=>p.manifest.scopes.some(s=>s.repoId===target.split('/')[0]));
+  const choices=[...await listCandidates(repo,language),...await listOnboardingCandidates(repo,language)].filter(p=>p.manifest.scopes.some(s=>s.repoId===target.split('/')[0]));
   if(choices.length>1)throw Error('Multiple pending groups contain this repository; regenerate candidates first');
   const existing=choices[0],branch=existing?.location.branch;
   if(!existing)throw Error('No pending release PR; keep this issue open until a candidate exists');
@@ -206,7 +244,7 @@ async function governanceChange(attempt=0) {
     case '地址迁移':if(content==='清除'){delete manifest.redirects[target];break;}if(documents.has(target)||!documents.has(content))throw Error('Migration must map a removed ID to an existing document ID');manifest.redirects[target]=content;break;
     case '标签调整':if(content==='清除'){delete manifest.labels[target];break;}if(!documents.has(target))throw Error('Document is outside candidate');manifest.labels[target]=content.split(/[,，]/).map(x=>x.trim()).filter(Boolean);break;
     case '引用登记':{
-      const url=value('引用原地址'),registry=read(path.join(root,'document-center/registry.json'));if(!documents.has(target)||!registry.repositories.some(r=>r.id===content.split('/')[0])||!content.includes(`/${language}/`)||!content.endsWith('.md')||!url)throw Error('Reference target must be a registered document in this language');manifest.references[`${target}::${url}`]=content;
+      const url=value('引用原地址'),registry=existing.registration||read(path.join(root,'document-center/registry.json'));if(!documents.has(target)||!registry.repositories.some(r=>r.id===content.split('/')[0])||!content.includes(`/${language}/`)||!content.endsWith('.md')||!url)throw Error('Reference target must be a registered document in this language');manifest.references[`${target}::${url}`]=content;
       // The CI checker regenerates references from this registration and validates closure.
       const scope=manifest.scopes.find(s=>target.startsWith(s.repoId+'/'));
       const doc=scope.documents.find(d=>`${scope.repoId}/${d.path}`===target);
@@ -214,6 +252,11 @@ async function governanceChange(attempt=0) {
     }
     case '文档反馈':manifest.feedback=manifest.feedback.filter(f=>f.issue!==issue.number);manifest.feedback.push({issue:issue.number,document:target,message:content});break;
     default:throw Error('Unknown governance operation');
+  }
+  if(existing.bundle){
+    const entry=existing.registration.repositories.find(r=>r.id===existing.bundle.repositoryId);
+    await registration(read(path.join(root,'document-center/registry.json')),{entry,bundle:existing.bundle,issue:{number:Number(branch.split('issue-')[1]),title:'[文档接入] 治理补充',user:issue.user}});
+    console.log(`Governance issue #${issue.number} applied atomically to onboarding PR #${existing.pr.number}; CI must rerun`);return;
   }
   try{await api(`/repos/${repo}/contents/${existing.location.file}`,'PUT',{branch,sha:existing.content.sha,message:`docs: apply governance issue #${issue.number}`,content:Buffer.from(JSON.stringify(manifest,null,2)+'\n').toString('base64')});}
   catch(error){if(error.httpStatus===409&&attempt<3)return governanceChange(attempt+1);throw error;}
@@ -227,7 +270,7 @@ async function publish() {
   const registration=/^document-registration\/issue-[1-9][0-9]*$/.test(pr.head.ref);
   if(pr.base.repo.full_name!==expected||pr.head.repo.full_name!==expected)throw Error('Unexpected release PR origin');
   const location=registration?null:parseReleaseBranch(pr.head.ref);
-  const document=registration?{registry:read(path.join(root,'document-center/registry.json'))}:{manifest:read(path.join(root,location.file))};
+  const document=registration?{registry:read(path.join(root,'document-center/registry.json')),onboarding:read(path.join(root,onboardingFile(pr.head.ref)))}:{manifest:read(path.join(root,location.file))};
   const base=process.env.DOCUMENT_PUBLISH_URL,token=process.env.DOCUMENT_RELEASE_TOKEN;
   if(!base||!token)throw Error('Protected release environment is not configured');
   const url=new URL(registration?'/admin/documents/governance/registration':'/admin/documents/releases',base);if(url.protocol!=='https:')throw Error('Release endpoint must use HTTPS');
@@ -238,22 +281,26 @@ async function publish() {
 async function backendPreview() {
   const event=read(process.env.GITHUB_EVENT_PATH),pr=event.pull_request,repo=process.env.GITHUB_REPOSITORY;
   if(!pr||pr.head.repo.full_name!==repo||!/^[a-f0-9]{40}$/.test(pr.head.sha))throw Error('Unexpected candidate preview origin');
-  const location=parseReleaseBranch(pr.head.ref);
-  const content=await api(`/repos/${repo}/contents/${location.file}?ref=${pr.head.sha}`);
-  const manifest=JSON.parse(Buffer.from(content.content,'base64').toString());
+  const remoteFile=async file=>{const content=await api(`/repos/${repo}/contents/${file}?ref=${pr.head.sha}`);return JSON.parse(Buffer.from(content.content,'base64').toString());};
+  const onboarding=pr.head.ref.startsWith('document-registration/');let registration,manifests;
+  if(onboarding){registration=await remoteFile('document-center/registry.json');const file=onboardingFile(pr.head.ref);if(registration.change?.onboarding!==file)throw Error('Unexpected onboarding preview path');const bundle=await remoteFile(file);validateOnboarding(registration,bundle);manifests=bundle.releases;}
+  else manifests=[await remoteFile(parseReleaseBranch(pr.head.ref).file)];
   const base=process.env.DOCUMENT_PREVIEW_URL,token=process.env.DOCUMENT_PREVIEW_TOKEN;
   if(!base||!token)throw Error('Backend candidate preview environment is not configured');
   const url=new URL('/admin/documents/previews',base);if(url.protocol!=='https:')throw Error('Preview endpoint must use HTTPS');
-  const response=await fetch(url,{method:'POST',redirect:'error',headers:{'Content-Type':'application/json','X-Document-Preview-Token':token},body:JSON.stringify(manifest),signal:AbortSignal.timeout(120000)});
-  if(!response.ok||!response.headers.get('content-type')?.includes('application/zip'))throw Error(`Backend preview failed: HTTP ${response.status}`);
-  const chunks=[];let size=0;for await(const chunk of response.body){size+=chunk.length;if(size>128*1024*1024)throw Error('Preview exceeds 128 MiB');chunks.push(chunk);}
-  const out=argument('--output',path.join(os.tmpdir(),'backend-preview.zip'));fs.mkdirSync(path.dirname(out),{recursive:true});fs.writeFileSync(out,Buffer.concat(chunks));
+  for(const manifest of manifests){
+    const response=await fetch(url,{method:'POST',redirect:'error',headers:{'Content-Type':'application/json','X-Document-Preview-Token':token},body:JSON.stringify(onboarding?{registration,manifest}:manifest),signal:AbortSignal.timeout(120000)});
+    if(!response.ok||!response.headers.get('content-type')?.includes('application/zip'))throw Error(`Backend preview failed: HTTP ${response.status}`);
+    const chunks=[];let size=0;for await(const chunk of response.body){size+=chunk.length;if(size>128*1024*1024)throw Error('Preview exceeds 128 MiB');chunks.push(chunk);}
+    const configured=argument('--output',path.join(os.tmpdir(),'backend-preview.zip'));const out=onboarding?path.join(path.dirname(path.resolve(configured)),`onboarding-${manifest.language}.zip`):configured;
+    fs.mkdirSync(path.dirname(out),{recursive:true});fs.writeFileSync(out,Buffer.concat(chunks));
+  }
   console.log(`Backend preview created for PR head ${pr.head.sha}`);
 }
 async function main(){
   const registry=read(path.join(root,'document-center/registry.json'));
   const temp=fs.mkdtempSync(path.join(os.tmpdir(),'document-governance-'));
-  try{switch(process.argv[2]){case 'candidate':return await candidate(registry,temp);case 'registration':return await registration(registry);case 'governance-change':return await governanceChange();case 'validate-registry':return validateRegistry(registry);case 'check-registration':return checkRegistration(registry,temp);case 'check':return await check(registry,temp);case 'backend-preview':return await backendPreview();case 'publish':return await publish();case 'report-stage':return await require('./report.cjs').reportStage(api,{repository:process.env.GITHUB_REPOSITORY,event:read(process.env.GITHUB_EVENT_PATH),needs:JSON.parse(process.env.DOCUMENT_JOB_RESULTS||'{}'),runId:process.env.GITHUB_RUN_ID});default:throw Error('Use candidate, registration, governance-change, validate-registry, check-registration, check --manifest FILE, backend-preview, publish, or report-stage');}}finally{fs.rmSync(temp,{recursive:true,force:true});}
+  try{switch(process.argv[2]){case 'candidate':return await candidate(registry,temp);case 'registration':return await registration(registry);case 'governance-change':return await governanceChange();case 'validate-registry':return validateRegistry(registry);case 'check-registration':return checkRegistration(registry,temp);case 'check-onboarding':return checkOnboarding(registry,temp);case 'check':return await check(registry,temp);case 'backend-preview':return await backendPreview();case 'publish':return await publish();case 'report-stage':return await require('./report.cjs').reportStage(api,{repository:process.env.GITHUB_REPOSITORY,event:read(process.env.GITHUB_EVENT_PATH),needs:JSON.parse(process.env.DOCUMENT_JOB_RESULTS||'{}'),runId:process.env.GITHUB_RUN_ID});default:throw Error('Use candidate, registration, governance-change, validate-registry, check-registration, check --manifest FILE, backend-preview, publish, or report-stage');}}finally{fs.rmSync(temp,{recursive:true,force:true});}
 }
 if(require.main===module)main().catch(e=>{console.error(e.message);process.exitCode=1;});
 module.exports={cloneSources,registrationFromIssue,registration,candidate,writeCandidate,checkRegistration};

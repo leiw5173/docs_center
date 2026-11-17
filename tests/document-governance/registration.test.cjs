@@ -65,33 +65,40 @@ test('every selectable category maps to a unique registered location and matches
   for(const label of ['登记 ID','目标路径前缀','目录层级 rootDep','子类节点 ID','分类路径','目标栏目'])assert.ok(!form.body.some(f=>f.attributes?.label===label));
 });
 
-test('new form generates a reviewable registration PR without renaming the selected or unrelated sources',async t=>{
-  const os=require('node:os');const {registration}=require('../../scripts/document-governance/run.cjs');
+test('one bilingual onboarding PR contains registration, pinned releases and state pointers without changing other sources',async t=>{
+  const os=require('node:os'),cp=require('node:child_process');const {registration}=require('../../scripts/document-governance/run.cjs');
   const temp=fs.mkdtempSync(path.join(os.tmpdir(),'registration-handoff-'));const savedFetch=global.fetch;
-  const keys=['GH_TOKEN','GITHUB_EVENT_PATH','GITHUB_REPOSITORY','DOCUMENT_GOVERNANCE_MAINTAINERS'];const saved=Object.fromEntries(keys.map(k=>[k,process.env[k]]));
+  const keys=['GH_TOKEN','GITHUB_EVENT_PATH','GITHUB_REPOSITORY','DOCUMENT_GOVERNANCE_MAINTAINERS','GIT_CONFIG_COUNT','GIT_CONFIG_KEY_0','GIT_CONFIG_VALUE_0','GIT_ALLOW_PROTOCOL'];const saved=Object.fromEntries(keys.map(k=>[k,process.env[k]]));
   t.after(()=>{global.fetch=savedFetch;for(const k of keys)if(saved[k]===undefined)delete process.env[k];else process.env[k]=saved[k];fs.rmSync(temp,{recursive:true,force:true});});
-  const event=path.join(temp,'event.json');fs.writeFileSync(event,JSON.stringify({issue:{number:9,title:'[文档接入] 分类调整',user:{login:'editor'},body:body({...fields,'来源仓库':'leiw5173/docs_test','来源标识（可选）':'_No response_'})}}));
-  Object.assign(process.env,{GH_TOKEN:'local-fixture-only',GITHUB_EVENT_PATH:event,GITHUB_REPOSITORY:'example/governance',DOCUMENT_GOVERNANCE_MAINTAINERS:'editor'});
-  let updated,prBody;const original=JSON.stringify(registry);
+  const source=path.join(temp,'source');fs.mkdirSync(source);const git=(...args)=>cp.execFileSync('git',['-C',source,...args]).toString().trim();git('init','--quiet','-b','main');
+  for(const language of ['zh','en'])fs.cpSync(path.resolve(__dirname,'../../examples/business-repository/zh'),path.join(source,language),{recursive:true});
+  git('add','.');git('-c','user.name=Test','-c','user.email=test@example.invalid','commit','--quiet','-m','bilingual source');const revision=git('rev-parse','HEAD');
+  const base=cp.execFileSync('git',['rev-parse','HEAD']).toString().trim();
+  const event=path.join(temp,'event.json');fs.writeFileSync(event,JSON.stringify({issue:{number:9,title:'[文档接入] 分类调整',user:{login:'editor'},body:body({...fields,'来源仓库':'spacemit-com/docs-courses','语言':'zh, en','来源标识（可选）':'_No response_'})}}));
+  Object.assign(process.env,{GH_TOKEN:'local-fixture-only',GITHUB_EVENT_PATH:event,GITHUB_REPOSITORY:'example/governance',DOCUMENT_GOVERNANCE_MAINTAINERS:'editor',GIT_CONFIG_COUNT:'1',GIT_CONFIG_KEY_0:`url.file://${source}.insteadOf`,GIT_CONFIG_VALUE_0:'https://github.com/spacemit-com/docs-courses.git',GIT_ALLOW_PROTOCOL:'file'});
+  let files,prBody;const original=JSON.stringify(registry);
   global.fetch=async(url,options={})=>{
     const u=new URL(url),method=options.method||'GET',payload=options.body?JSON.parse(options.body):null;
     const resource=u.pathname.replace('/repos/example/governance','');let result;
     if(resource==='/collaborators/editor/permission')result={permission:'write'};
     else if(resource==='')result={default_branch:'main'};
     else if(resource==='/pulls'&&method==='GET')result=[];
-    else if(resource==='/git/ref/heads/main')result={object:{sha:'a'.repeat(40)}};
+    else if(resource==='/git/ref/heads/main')result={object:{sha:base}};
     else if(resource.startsWith('/git/matching-refs/'))result=[];
+    else if(resource==='/git/commits/'+base)result={tree:{sha:base}};
+    else if(resource==='/git/trees'&&method==='POST'){files=Object.fromEntries(payload.tree.map(f=>[f.path,JSON.parse(f.content)]));result={sha:'b'.repeat(40)};}
+    else if(resource==='/git/commits'&&method==='POST')result={sha:'c'.repeat(40)};
     else if(resource==='/git/refs'&&method==='POST')result={};
-    else if(resource==='/contents/document-center/registry.json'&&method==='GET')result={sha:'b'.repeat(40)};
-    else if(resource==='/contents/document-center/registry.json'&&method==='PUT'){updated=JSON.parse(Buffer.from(payload.content,'base64'));result={};}
     else if(resource==='/pulls'&&method==='POST'){prBody=payload.body;result={number:10};}
     else throw Error('Unexpected fixture request '+method+' '+resource);
     return new Response(JSON.stringify(result),{status:200,headers:{'Content-Type':'application/json'}});
   };
   await registration(registry);
-  assert.equal(updated.change.repositoryId,'maintenance-test');assert.equal(updated.repositories.length,registry.repositories.length);
-  const entry=updated.repositories.find(r=>r.id==='maintenance-test');assert.equal(entry.prefix,'maintenance-test');assert.equal(entry.rootDep,1);
-  for(const r of registry.repositories.filter(r=>r.id!=='maintenance-test'))assert.deepEqual(updated.repositories.find(n=>n.id===r.id),r);
-  assert.match(prBody,/来源标识 \| maintenance-test/);assert.match(prBody,/应用案例 \/ 教学与实践/);assert.match(prBody,/地址前缀 \| maintenance-test/);assert.match(prBody,/docs\/repository-registration.md/);
-  assert.equal(JSON.stringify(registry),original);
+  const updated=files['document-center/registry.json'],bundle=files['document-center/onboarding/issue-9.json'];
+  assert.equal(updated.change.repositoryId,'docs-courses');assert.equal(updated.change.onboarding,'document-center/onboarding/issue-9.json');assert.equal(updated.repositories.length,registry.repositories.length);
+  const entry=updated.repositories.find(r=>r.id==='docs-courses');assert.equal(entry.prefix,'courses');assert.equal(entry.rootDep,3);
+  for(const r of registry.repositories.filter(r=>r.id!=='docs-courses'))assert.deepEqual(updated.repositories.find(n=>n.id===r.id),r);
+  assert.deepEqual(bundle.releases.map(m=>m.language),['zh','en']);
+  for(const m of bundle.releases){assert.equal(m.scopes[0].commit,revision);assert.deepEqual(files[`document-center/releases/${m.language}/${m.groupId}.json`],m);assert.deepEqual(files[`document-center/state/${m.language}/docs-courses.json`],{repoId:'docs-courses',groupId:m.groupId});}
+  assert.match(prBody,/只合并一次/);assert.match(prBody,/地址前缀 \| courses/);assert.equal(JSON.stringify(registry),original);
 });

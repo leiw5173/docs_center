@@ -65,9 +65,21 @@ jobs:
       - run: node scripts/document-governance/run.cjs candidate
         env:
           GH_TOKEN: ${{ secrets.DOCUMENT_GOVERNANCE_TOKEN }}
+  registration-access:
+    name: document-registration-checks
+    if: github.event_name == 'pull_request' && github.event.action != 'closed' && startsWith(github.head_ref, 'document-registration/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+      - run: node scripts/document-governance/run.cjs check-registration
   preview:
     name: document-release-checks
-    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+    needs: registration-access
+    if: always() && github.event_name == 'pull_request' && github.event.action != 'closed' && (!startsWith(github.head_ref, 'document-registration/') || needs.registration-access.result == 'success')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -77,9 +89,9 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm test
-      - name: Validate registration
+      - name: Check initial content in the onboarding PR
         if: startsWith(github.head_ref, 'document-registration/')
-        run: node scripts/document-governance/run.cjs check-registration
+        run: node scripts/document-governance/run.cjs check-onboarding --output "$RUNNER_TEMP/document-preview"
       - name: Check immutable manifests and build previews
         if: startsWith(github.head_ref, 'document-release/')
         shell: bash
@@ -100,7 +112,7 @@ jobs:
   backend-preview:
     name: document-release-preview
     needs: preview
-    if: github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    if: always() && needs.preview.result == 'success' && github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     environment: document-preview
     steps:
@@ -113,17 +125,17 @@ jobs:
           node-version: '22'
       - run: npm ci --ignore-scripts
       - name: Request backend staging artifact
-        if: startsWith(github.head_ref, 'document-release/')
+        if: startsWith(github.head_ref, 'document-release/') || startsWith(github.head_ref, 'document-registration/')
         run: node scripts/document-governance/run.cjs backend-preview --output "$RUNNER_TEMP/backend-preview/preview.zip"
         env:
           GH_TOKEN: ${{ github.token }}
           DOCUMENT_PREVIEW_URL: ${{ vars.DOCUMENT_PREVIEW_URL }}
           DOCUMENT_PREVIEW_TOKEN: ${{ secrets.DOCUMENT_PREVIEW_TOKEN }}
       - uses: actions/upload-artifact@v4
-        if: startsWith(github.head_ref, 'document-release/')
+        if: startsWith(github.head_ref, 'document-release/') || startsWith(github.head_ref, 'document-registration/')
         with:
           name: backend-document-preview-${{ github.event.pull_request.head.sha }}
-          path: ${{ runner.temp }}/backend-preview/preview.zip
+          path: ${{ runner.temp }}/backend-preview
           if-no-files-found: error
           retention-days: 14
   publish:
@@ -143,7 +155,7 @@ jobs:
           DOCUMENT_PUBLISH_URL: ${{ vars.DOCUMENT_PUBLISH_URL }}
           DOCUMENT_RELEASE_TOKEN: ${{ secrets.DOCUMENT_RELEASE_TOKEN }}
   report:
-    needs: [preview, backend-preview, publish]
+    needs: [registration-access, preview, backend-preview, publish]
     if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && (startsWith(github.event.pull_request.head.ref, 'document-release/') || startsWith(github.event.pull_request.head.ref, 'document-registration/'))
     runs-on: ubuntu-latest
     permissions:

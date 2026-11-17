@@ -1,0 +1,23 @@
+const {test}=require('node:test'),assert=require('node:assert/strict');
+const {validateOnboarding,onboardingFile,onboardingFiles}=require('../../scripts/document-governance/onboarding.cjs');
+const {sha}=require('../../scripts/document-governance/core.cjs');
+const {stageStatus}=require('../../scripts/document-governance/report.cjs');
+const entry={id:'new',repository:'example/new',prefix:'new',rootDep:1,column:'cases',branch:'main',languages:['zh','en']};
+const registry={schemaVersion:1,change:{repositoryId:'new',onboarding:'document-center/onboarding/issue-5.json'},repositories:[entry]};
+const scope=language=>({...entry,repoId:entry.id,language,commit:'a'.repeat(40),documents:[],assets:[]});
+const manifest=language=>({schemaVersion:1,language,groupId:'g-'+sha('new').slice(0,20),groupRepositories:['new'],scopes:[scope(language)]});
+const bundle=()=>({schemaVersion:1,repositoryId:'new',releases:['zh','en'].map(manifest)});
+test('bilingual onboarding submits one bundle and both canonical accepted-state pointers',()=>{const value=bundle();validateOnboarding(registry,value);const files=onboardingFiles(registry,value,onboardingFile('document-registration/issue-5'));assert.equal(Object.keys(files).length,6);for(const language of ['zh','en'])assert.ok(files[`document-center/state/${language}/new.json`]);});
+test('missing language, duplicate language and mixed revisions cannot authorize onboarding',()=>{for(const change of [b=>b.releases.pop(),b=>b.releases[1].language='zh',b=>b.releases[1].scopes[0].commit='b'.repeat(40)]){const b=bundle();change(b);assert.throws(()=>validateOnboarding(registry,b));}});
+test('onboarding scope must agree with registration and branch identity is strict',()=>{const b=bundle();b.releases[0].scopes[0].prefix='changed';assert.throws(()=>validateOnboarding(registry,b),/differs/);assert.throws(()=>onboardingFile('document-registration/issue-5/../6'));});
+test('registration access failures and final acceptance stay within the same PR',()=>{const event={action:'opened',pull_request:{head:{ref:'document-registration/issue-5'}}};assert.equal(stageStatus(event,{'registration-access':{result:'failure'},preview:{result:'skipped'}}).status,'接入检查失败');assert.equal(stageStatus(event,{'registration-access':{result:'success'},preview:{result:'success'},'backend-preview':{result:'success'}}).status,'待文档团队确认');const result=stageStatus({...event,action:'closed',pull_request:{...event.pull_request,merged:true}},{publish:{result:'success'}});assert.equal(result.status,'接入发布任务已受理');assert.ok(!result.message.includes('审核候选发布 PR'));});
+test('initial onboarding includes direct and indirect registered references without loading unrelated sources',async t=>{
+ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),cp=require('node:child_process');const {buildOnboarding}=require('../../scripts/document-governance/onboarding.cjs');
+ const temp=fs.mkdtempSync(path.join(os.tmpdir(),'onboarding-group-'));t.after(()=>fs.rmSync(temp,{recursive:true,force:true}));
+ const roots={},revisions={};
+ for(const [id,text] of [['new','# New\n\n[peer](https://example.invalid/b.md)'],['b','# B\n\n[peer](https://example.invalid/c.md)'],['c','# C\n\nSource']]){const dir=path.join(temp,id);fs.mkdirSync(dir);const git=(...args)=>cp.execFileSync('git',['-C',dir,...args]).toString().trim();git('init','--quiet','-b','main');fs.mkdirSync(path.join(dir,'zh'));fs.writeFileSync(path.join(dir,'zh/index.md'),text);git('add','.');git('-c','user.name=Test','-c','user.email=test@example.invalid','commit','--quiet','-m','source');roots[id]=dir;revisions[id]=git('rev-parse','HEAD');}
+ const selected={...entry,languages:['zh']};const regs={schemaVersion:1,change:{repositoryId:'new'},repositories:[selected,...['b','c','d'].map(id=>({...selected,id,repository:'example/'+id,prefix:id}))]};
+ const previous={schemaVersion:1,language:'zh',scopes:[{repoId:'b',documents:[{path:'zh/index.md',references:['c/zh/index.md']}]},{repoId:'c',documents:[]}],references:{'b/zh/index.md::https://example.invalid/c.md':'c/zh/index.md'},redirects:{},labels:{},feedback:[]};
+ const loaded=new Set();const result=await buildOnboarding({registry:regs,entry:selected,previousFor:()=>previous,overridesFor:()=>({...previous,references:{...previous.references,'new/zh/index.md::https://example.invalid/b.md':'b/zh/index.md'}}),load:async sources=>{sources.forEach(r=>{assert.ok(roots[r.id],'unrelated source must not load');loaded.add(r.id)});return {roots,revisions};}});
+ assert.deepEqual(result.releases[0].groupRepositories,['b','c','new']);assert.deepEqual([...loaded].sort(),['b','c','new']);assert.equal(result.releases[0].scopes.find(s=>s.repoId==='new').documents[0].references[0],'b/zh/index.md');
+});

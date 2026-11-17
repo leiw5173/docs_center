@@ -4,10 +4,11 @@ function stageStatus(event,needs) {
   if(merged) {
     if(needs.publish?.result==='failure'||needs.publish?.result==='cancelled')return {status:'发布状态待核对',message:'工作流未能确认最终结果。请先查看本 PR 的发布结果回报，再决定是否重试；请求超时或中断不能证明已回滚。'};
     if(needs.publish?.result==='success')return event.pull_request.head.ref.startsWith('document-registration/')
-      ?{status:'接入登记完成',message:'所选仓库已登记，首轮候选任务已提交。接下来审核候选发布 PR。'}
+      ?{status:'接入发布任务已受理',message:'登记与首版发布统一执行，最终结果将回报到本 PR；收到最终结果前，不将受理视为发布成功。'}
       :{status:'发布任务已受理',message:'发布结果将回报到本 PR；收到最终结果前，不将任务受理视为发布成功。'};
     return null;
   }
+  if(event.pull_request?.head.ref.startsWith('document-registration/')&&needs['registration-access']?.result!=='success')return {status:'接入检查失败',message:'请检查来源仓库、分支、语言和分类信息；接入检查通过后再进行首版内容检查与预览。'};
   if(needs.preview?.result!=='success')return {status:'检查失败',message:'正文、资源、目录链接问题回业务仓库修正；分类、迁移与引用登记通过治理 Issue 补充。'};
   if(needs['backend-preview']?.result!=='success')return {status:'预览未通过',message:'请查看预览工作流记录并协调修正，保持此 PR 待确认。'};
   return {status:'待文档团队确认',message:'自动检查和预览通过，请核对内容、引用关联组、目录子类、语言及版本归档后手动合并。'};
