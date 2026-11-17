@@ -25,7 +25,7 @@ body:
     id: languages
     attributes:
       label: 语言
-      description: 按实际存在的 zh、en 文档目录选择；缺少英文不阻断中文接入。
+      description: 可多选：只有中文选 zh，只有英文选 en，中英文都有时同时勾选 zh 和 en；仓库需有对应的 zh/、en/ 文档目录。
       multiple: true
       options:
         - zh
