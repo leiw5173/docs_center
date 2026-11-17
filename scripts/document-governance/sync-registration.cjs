@@ -5,7 +5,7 @@ const names={hardware:'硬件',os:'操作系统',ai:'AI软件栈',cases:'应用�
 const ids=new Set(),labels=new Set();
 if(catalog.schemaVersion!==1||!Array.isArray(catalog.categories)||!catalog.categories.length)throw Error('Missing category catalog');
 for(const c of catalog.categories){
-  if(!names[c.column]||typeof c.id!=='string'||!/^[\w/-]+$/.test(c.id)||c.id.split('/').some(p=>!p||p==='..')||!Array.isArray(c.path)||!c.path.length||c.path[0]!==names[c.column]||c.path.some(p=>typeof p!=='string'||!p.trim()||/[|\r\n]/.test(p)))throw Error('Invalid category');
+  if(!names[c.column]||typeof c.id!=='string'||!/^[\w/-]+$/.test(c.id)||c.id.split('/').some(p=>!p||p==='..')||!Array.isArray(c.path)||!c.path.length||c.path.length>2||c.path[0]!==names[c.column]||c.path.some(p=>typeof p!=='string'||!p.trim()||/[|\r\n]/.test(p)))throw Error('Invalid category: use a top-level column or its direct subcategory');
   const label=c.path.join(' / ');if(ids.has(c.id)||labels.has(label))throw Error('Duplicate category');ids.add(c.id);labels.add(label);
 }
 const formFile=path.join(root,'.github/ISSUE_TEMPLATE/document-registration.yml');

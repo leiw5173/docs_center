@@ -39,27 +39,28 @@ body:
       description: 选择希望展示的位置。栏目、子类 ID 和分类路径自动关联；不在列表中的分类请先提交分类申请。
       options:
         - 硬件
-        - 硬件 / 芯片 / K 系列 AI CPU 芯片
-        - 硬件 / 芯片 / P 系列电源芯片
-        - 硬件 / 芯片 / V 系列服务器芯片
-        - 硬件 / 板卡与整机 / K3 系列
-        - 硬件 / 板卡与整机 / K1 系列
-        - 硬件 / 板卡与整机 / V100 系列
-        - 硬件 / 板卡与整机 / 生态板块与设备
-        - 硬件 / 板卡与整机 / 硬件配件
+        - 硬件 / 芯片
+        - 硬件 / 板卡与整机
         - 硬件 / 支持与服务
         - 操作系统
-        - 操作系统 / Bianbu / Bianbu 用户指南 / LXQt / MUSE Pi
-        - 操作系统 / Bianbu / Bianbu 用户指南 / LXQt / MUSE Pi / MUSE Pi Pro 拓展 I
-        - 操作系统 / Bianbu / 系统集成 / Bianbu 2.1
-        - 操作系统 / Buildroot / K3 Buildroot / 安全 / CA 开发指南
-        - 操作系统 / OpenHarmony / 技术专题 / AI推理库专题 / SpaceMIT K3 AI 推理库使用文档（llama.cpp C API
+        - 操作系统 / Bianbu
+        - 操作系统 / OpenWrt
+        - 操作系统 / Buildroot
+        - 操作系统 / OpenHarmony
+        - 操作系统 / 其他生态系统
         - 操作系统 / 镜像安装
         - AI软件栈
+        - AI软件栈 / 应用软件栈
+        - AI软件栈 / 计算软件栈
+        - AI软件栈 / 计算架构
         - 应用案例
+        - 应用案例 / Robot 应用
+        - 应用案例 / Computer 应用
         - 应用案例 / 教学与实践
         - 常用工具
+        - 常用工具 / 进迭云
         - 常用工具 / 使用手册
+        - 常用工具 / SpacemiT Studio
     validations:
       required: true
   - type: input

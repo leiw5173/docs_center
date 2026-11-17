@@ -6,6 +6,8 @@
 
 在接入表单选择完整中文分类即可，不需要填写栏目代码、节点 ID 或重复抄写分类路径。选择顶级栏目表示放在该栏目下；选择子类表示放在该子类下。
 
+接入位置最多展示两级：**顶级栏目 / 直接子类**，例如“操作系统 / Bianbu”。仓库内的更深文档目录由该仓库维护，不逐项列入接入分类表。
+
 | 网站栏目 | 内部代码 | 内容归属参考 |
 | --- | --- | --- |
 | 硬件 | hardware | 芯片、板卡、整机及硬件支持 |
@@ -21,27 +23,28 @@
 | 目标分类（表单显示） | 栏目 | 子类节点 ID（自动填写，无需抄写） |
 | --- | --- | --- |
 | 硬件 | 硬件 | `hardware` |
-| 硬件 / 芯片 / K 系列 AI CPU 芯片 | 硬件 | `hardware/hardware-5dcfdf80b583fa3f/csv-a35bc7e7a76efde887af` |
-| 硬件 / 芯片 / P 系列电源芯片 | 硬件 | `hardware/hardware-5dcfdf80b583fa3f/csv-bda3c984cf3295872e92` |
-| 硬件 / 芯片 / V 系列服务器芯片 | 硬件 | `hardware/hardware-5dcfdf80b583fa3f/csv-3332147b5f8dd5b8b41b` |
-| 硬件 / 板卡与整机 / K3 系列 | 硬件 | `hardware/hardware-7e1f3854607bec1f/hardware-0fb98f8a081a35d3` |
-| 硬件 / 板卡与整机 / K1 系列 | 硬件 | `hardware/hardware-7e1f3854607bec1f/hardware-cb79ff68db281b7f` |
-| 硬件 / 板卡与整机 / V100 系列 | 硬件 | `hardware/hardware-7e1f3854607bec1f/hardware-3fdbf180960383bb` |
-| 硬件 / 板卡与整机 / 生态板块与设备 | 硬件 | `hardware/hardware-7e1f3854607bec1f/hardware-ecosystem-devices` |
-| 硬件 / 板卡与整机 / 硬件配件 | 硬件 | `hardware/hardware-7e1f3854607bec1f/hardware-138e4a2f6b4047e1` |
+| 硬件 / 芯片 | 硬件 | `hardware/hardware-5dcfdf80b583fa3f` |
+| 硬件 / 板卡与整机 | 硬件 | `hardware/hardware-7e1f3854607bec1f` |
 | 硬件 / 支持与服务 | 硬件 | `hardware/hardware-dbbe5bbf851d8f07` |
 | 操作系统 | 操作系统 | `os` |
-| 操作系统 / Bianbu / Bianbu 用户指南 / LXQt / MUSE Pi | 操作系统 | `os/os-27e42591c00b5520/os-c048af055eb09c53/os-58574cb392fa9c27/csv-6931c46cbea9893dd2a4` |
-| 操作系统 / Bianbu / Bianbu 用户指南 / LXQt / MUSE Pi / MUSE Pi Pro 拓展 I | 操作系统 | `os/os-27e42591c00b5520/os-c048af055eb09c53/os-58574cb392fa9c27/csv-6931c46cbea9893dd2a4/csv-00c89b75095c39f2530a` |
-| 操作系统 / Bianbu / 系统集成 / Bianbu 2.1 | 操作系统 | `os/os-27e42591c00b5520/os-1f5b2a9125308ddf/csv-ebea5827a9462d920be6` |
-| 操作系统 / Buildroot / K3 Buildroot / 安全 / CA 开发指南 | 操作系统 | `os/os-f4b5b1e54b76e98d/os-11105ec1c221e6c2/os-a6ac06c57226ace8/csv-fcb1b58ebc97119b4ba5` |
-| 操作系统 / OpenHarmony / 技术专题 / AI推理库专题 / SpaceMIT K3 AI 推理库使用文档（llama.cpp C API | 操作系统 | `os/os-8aa903fa0d71df65/os-485e1ca357f61597/os-34f4c3443998f92a/csv-de16ffab15b04b59f84a` |
+| 操作系统 / Bianbu | 操作系统 | `os/os-27e42591c00b5520` |
+| 操作系统 / OpenWrt | 操作系统 | `os/os-67f32b0ec33df526` |
+| 操作系统 / Buildroot | 操作系统 | `os/os-f4b5b1e54b76e98d` |
+| 操作系统 / OpenHarmony | 操作系统 | `os/os-8aa903fa0d71df65` |
+| 操作系统 / 其他生态系统 | 操作系统 | `os/os-caddd22b1aaa7c4a` |
 | 操作系统 / 镜像安装 | 操作系统 | `os/csv-717ffbdfa8cf697ff011` |
 | AI软件栈 | AI软件栈 | `ai` |
+| AI软件栈 / 应用软件栈 | AI软件栈 | `ai/csv-2dffc483229dd457db01` |
+| AI软件栈 / 计算软件栈 | AI软件栈 | `ai/ai-be2aa334995df2f5` |
+| AI软件栈 / 计算架构 | AI软件栈 | `ai/csv-868f64211636a2fd17d0` |
 | 应用案例 | 应用案例 | `cases` |
+| 应用案例 / Robot 应用 | 应用案例 | `cases/cases-0de8e427fbbfcf6f` |
+| 应用案例 / Computer 应用 | 应用案例 | `cases/cases-bf554e640638f372` |
 | 应用案例 / 教学与实践 | 应用案例 | `cases/cases-teaching-practice` |
 | 常用工具 | 常用工具 | `tools` |
+| 常用工具 / 进迭云 | 常用工具 | `tools/csv-92c9ce85db6851f65a96` |
 | 常用工具 / 使用手册 | 常用工具 | `tools/tools-common-manuals` |
+| 常用工具 / SpacemiT Studio | 常用工具 | `tools/tools-d90c6909d3eab047` |
 
 <!-- categories:end -->
 
@@ -51,7 +54,7 @@
 
 该反馈由文档团队人工协调，不会自动创建网站分类。确认目录已存在、位置与各发布语言可用后，维护人员通过 PR 同步分类登记、表单及本表；申请人再提交接入表单。分类新增本身不发布正文。
 
-网站上的文章链接、带下级内容的文档入口不一定都是可接入的目录，因此本表不是所有导航文字的清单。目标在执行前仍会校验，已删除或不可用的分类不能靠旧表单放行。
+网站上的单篇文章不作为接入分类；带概述正文和下级内容的栏目入口可以承载来源。本表只列顶级栏目和直接子类。目标在执行前仍会校验，已删除或不可用的分类不能靠旧表单放行。
 
 ## 维护责任
 

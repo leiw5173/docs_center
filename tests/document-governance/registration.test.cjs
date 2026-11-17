@@ -60,6 +60,8 @@ test('every selectable category maps to a unique registered location and matches
   assert.equal(new Set(options).size,options.length);assert.equal(new Set(catalog.categories.map(c=>c.id)).size,options.length);
   const table=fs.readFileSync(path.join(root,'docs/category-catalog.md'),'utf8');
   for(const c of catalog.categories){const entry=registrationFromIssue(body({...fields,'目标分类':c.path.join(' / ')}),registry);assert.equal(entry.column,c.column);assert.equal(entry.parentNavigationId,c.id);assert.deepEqual(entry.navigationPath,c.path);assert.ok(table.includes(c.id));assert.ok(table.includes(c.path.join(' / ')));}
+  assert.ok(catalog.categories.every(c=>c.path.length<=2));
+  assert.ok(options.includes('操作系统 / Bianbu'));
   for(const label of ['登记 ID','目标路径前缀','目录层级 rootDep','子类节点 ID','分类路径','目标栏目'])assert.ok(!form.body.some(f=>f.attributes?.label===label));
 });
 
