@@ -26,16 +26,22 @@ async function reportStage(api,{repository,event,needs,runId}) {
     const sites=require('./preview-sites.cjs').previewSites(needs['backend-preview'].outputs.preview_sites);
     const url=text=>text.replace(/[()]/g,c=>c==='('?'%28':'%29');
     const label=text=>text.replace(/[\r\n`\[\]<>*\\]/g,' ');
-    links='\n\n### 文档中心测试网预览\n\n使用文档中心实际页面，包含候选发布后的目录、侧栏和正文；尚未正式发布，链接与本次修订绑定。\n\n'+sites.map(site=>`- [${site.language==='zh'?'中文':'English'}：打开文档中心预期效果](${url(site.url)})\n`+site.redirects.map(link=>`  - [测试旧链接自动跳转：${label(link.from.split('/').slice(1).join('/'))}](${url(link.url)})`).join('\n')).join('\n');
+    const change={added:'新增',modified:'修改',moved:'迁移'};
+    links='\n\n### 文档中心测试网预览\n\n以下链接直接打开本轮变更页面，包含文档中心实际侧栏和导航；尚未正式发布。\n\n'+sites.map(site=>`**${site.language==='zh'?'中文':'English'}：本次变更页面（${site.pages.length}）**\n\n`+(site.pages.length?site.pages.map(page=>`- [${label(page.title)} · ${label(page.path)}（${change[page.change]}）](${url(page.url)})`).join('\n'):'本轮无正文或路径变更。')+(site.redirects.length?'\n\n旧链接跳转测试：\n\n'+site.redirects.map(link=>`- [${label(link.from.split('/').slice(1).join('/'))}](${url(link.url)})`).join('\n'):'')).join('\n\n');
   }
   const body=`${marker}\n### 文档维护状态：${result.status}\n\n${result.message}${links}\n\n候选修订：\`${pr.head.sha}\`\n\n[查看此次检查和执行记录](https://github.com/${repository}/actions/runs/${runId})`;
-  let found;
+  const commentsFound=[];
   for(let page=1;page<=20;page++) {
     const comments=await api(`/repos/${repository}/issues/${pr.number}/comments?per_page=100&page=${page}`);
-    found=comments.find(c=>c.body?.startsWith(marker));if(found||comments.length<100)break;
+    commentsFound.push(...comments);if(comments.length<100)break;
     if(page===20)throw Error('Status comment lookup exceeds limit');
   }
-  if(found?.body===body)return;
-  return api(found?`/repos/${repository}/issues/comments/${found.id}`:`/repos/${repository}/issues/${pr.number}/comments`,found?'PATCH':'POST',{body});
+  const chunks=[''];for(const line of body.split('\n')){if(chunks.at(-1).length+line.length+1>48000)chunks.push('');chunks[chunks.length-1]+=line+'\n';}
+  for(let i=0;i<chunks.length;i++) {
+    const chunkMarker=i?`<!-- document-governance-stage:${pr.head.sha}:pages:${i+1} -->`:marker;
+    const content=(i?`${chunkMarker}\n### 本次变更页面（续）\n\n`: '')+chunks[i].trimEnd();
+    const found=commentsFound.find(c=>c.body?.startsWith(chunkMarker));if(found?.body===content)continue;
+    await api(found?`/repos/${repository}/issues/comments/${found.id}`:`/repos/${repository}/issues/${pr.number}/comments`,found?'PATCH':'POST',{body:content});
+  }
 }
 module.exports={stageStatus,reportStage};
