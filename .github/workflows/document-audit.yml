@@ -1,0 +1,82 @@
+name: Document audit
+on:
+  schedule:
+    # Monday at 09:20 China time.
+    - cron: '20 1 * * 1'
+  workflow_dispatch:
+    inputs:
+      report_only:
+        description: 只生成报告，暂不创建或更新 Issue
+        type: boolean
+        default: false
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: document-audit
+  cancel-in-progress: false
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - name: Load latest usable published inventory
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/audit-baseline"
+          runs=$(gh run list --workflow document-audit.yml --branch "$GITHUB_REF_NAME" --status success \
+            --limit 10 --json databaseId --jq '.[].databaseId')
+          for run in $runs; do
+            gh run download "$run" --name document-audit-baseline --dir "$RUNNER_TEMP/audit-baseline" && break
+          done
+      - name: Inspect published website and accepted source revisions
+        run: node scripts/document-governance/run-audit.cjs scan "$RUNNER_TEMP/document-audit" "$RUNNER_TEMP/audit-baseline/published-inventory.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: document-audit-report
+          path: |
+            ${{ runner.temp }}/document-audit/published-report.json
+            ${{ runner.temp }}/document-audit/pinned/**/report.json
+            ${{ runner.temp }}/document-audit/pinned/**/manifest.json
+            ${{ runner.temp }}/document-audit/pinned/**/coverage-error.json
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: document-audit-baseline
+          path: ${{ runner.temp }}/document-audit/published-inventory.json
+          if-no-files-found: ignore
+          retention-days: 90
+  issues:
+    needs: inspect
+    if: github.ref_name == github.event.repository.default_branch && !inputs.report_only
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+      - uses: actions/download-artifact@v4
+        with:
+          name: document-audit-report
+          path: ${{ runner.temp }}/document-audit
+      - name: Create or update maintenance Issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/document-governance/run-audit.cjs issues "$RUNNER_TEMP/document-audit"

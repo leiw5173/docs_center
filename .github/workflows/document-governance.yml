@@ -148,6 +148,8 @@ jobs:
     name: document-release-preview
     outputs:
       preview_sites: ${{ steps.staging.outputs.preview_sites }}
+      review_status: ${{ steps.review.outputs.review_status }}
+      review_summary: ${{ steps.review.outputs.review_summary }}
     needs: preview
     if: always() && needs.preview.result == 'success' && github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
@@ -169,8 +171,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           DOCUMENT_PREVIEW_URL: ${{ vars.DOCUMENT_PREVIEW_URL }}
           DOCUMENT_PREVIEW_TOKEN: ${{ secrets.DOCUMENT_PREVIEW_TOKEN }}
+      - name: Install browser for deployed preview review
+        if: steps.staging.outputs.preview_sites != ''
+        run: npx --no-install playwright install --with-deps chromium
+      - name: Review deployed document center
+        id: review
+        if: steps.staging.outputs.preview_sites != ''
+        env:
+          DOCUMENT_PREVIEW_SITES: ${{ steps.staging.outputs.preview_sites }}
+        run: node scripts/document-governance/review-preview.cjs "$RUNNER_TEMP/backend-preview/review.json"
       - uses: actions/upload-artifact@v4
-        if: startsWith(github.head_ref, 'document-release/') || startsWith(github.head_ref, 'document-registration/')
+        if: always() && steps.staging.outputs.preview_sites != ''
         with:
           name: backend-document-preview-${{ github.event.pull_request.head.sha }}
           path: ${{ runner.temp }}/backend-preview
