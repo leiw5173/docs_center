@@ -12,7 +12,10 @@
     "demo": "node scripts/document-governance/demo.cjs"
   },
   "dependencies": {
-    "markdown-it": "^14.3.3",
-    "js-yaml": "^4.3.2"
+    "js-yaml": "^4.3.2",
+    "markdown-it": "^14.3.3"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1"
   }
 }

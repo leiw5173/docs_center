@@ -2,7 +2,7 @@
 function checkReport(result) {
   const rows=[
     ['links','页内及文档链接',['broken-link','anchor','link','external-resource','external-link','reference-registration'],'外部网站有效性需人工核对。'],
-    ['content','内容完整性及序号',['metadata','empty-source','incomplete','content-review','list-start'],'核对缺章、占位内容及列表是否应从 1 开始；自动检查不能证明语义完整。'],
+    ['content','内容完整性及序号',['metadata','empty-source','incomplete','content-incomplete','content-review','list-start'],'核对缺章、占位内容及列表是否应从 1 开始；自动检查不能证明语义完整。'],
     ['titles','标题数字',['numbered-title'],'核对标题中 6.1 等章节编号是否需要去掉。'],
     ['references','引用影响',['reference-group','cross-language'],'核对下列直接、间接引用者；自动检查只覆盖已登记来源和可解析链接。'],
     ['versions','版本与旧版归档',['version'],'逐项确认是否需要升级软件版本、保留旧版并完成归档；检查不会自动升级或归档。'],

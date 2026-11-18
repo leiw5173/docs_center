@@ -68,11 +68,37 @@ test('empty or unsafe registry cannot silently produce green validation',()=>{
   assert.throws(()=>validateRegistry({schemaVersion:1,repositories:[]}),/Register/);assert.throws(()=>validateRegistry({schemaVersion:1,repositories:[{...registration,id:'..'}]}),/Invalid/);
 });
 test('heading suffixes match duplicate anchors',()=>{const r=analyze('# Same\n\n## Same\n');assert(r.anchors.has('same'));assert(r.anchors.has('same-1'));});
-test('front matter chapter numbers and empty sections are review items; code examples are not unfinished prose',t=>{
+test('chapter numbers are warnings and empty installation sections block; code examples count as content',t=>{
   const f=fixture(t,{...good,'zh/guide.md':'---\ntitle: "6.1"\n---\n# Guide\n\n## 安装\n\n## Empty\n\n正文\n'});
-  const r=run(f);assert(r.warnings.some(w=>w.code==='numbered-title'));assert(r.warnings.some(w=>w.code==='content-review'));
+  const r=run(f);assert(r.warnings.some(w=>w.code==='numbered-title'));assert(r.errors.some(e=>e.code==='content-incomplete'&&e.line===6));
   const complete=fixture(t,{...good,'zh/guide.md':'# Guide\n\n## 安装\n\n正文\n\n```\nTODO 待补充\n```\n'});
   assert(!run(complete).warnings.some(w=>w.file==='zh/guide.md'&&w.code==='content-review'));
+});
+test('revision history and an empty numbered overview block a new guide but warn for an identical published blob',t=>{
+  const file='zh/guide.md';
+  const f=fixture(t,{...good,'zh/index.md':'# 目录\n\n[指南](guide.md)\n',[file]:
+    '---\ntitle: Ubuntu 烧录启动指南\n---\n# Ubuntu 烧录启动指南\n\n## 修订记录\n\n| 版本 | 说明 |\n| --- | --- |\n| 001 | 初始版本 |\n\n## 1. 概述\n\n<!-- 待补充 -->\n\n---\n'});
+  const candidate=run(f);
+  assert(candidate.errors.some(e=>e.code==='content-incomplete'&&e.message.includes('只有修订记录')));
+  assert(candidate.errors.some(e=>e.code==='content-incomplete'&&e.line===12&&e.message.includes('概述')));
+  const existing=run(f,{previous:candidate.manifest});
+  assert(!existing.errors.some(e=>e.code==='content-incomplete'));
+  assert(existing.warnings.some(w=>w.code==='content-review'&&w.line===12));
+});
+test('a bare sidebar position at the start does not count as guide content',t=>{
+  const f=fixture(t,{...good,'zh/index.md':'# 目录\n\n[指南](guide.md)\n',
+    'zh/guide.md':'sidebar_position: 1\r\n\r\n# 指南\r\n\r\n## 修订记录\r\n\r\n初始版本\r\n\r\n## 1. 概述\r\n'});
+  const errors=run(f).errors;
+  assert(errors.some(e=>e.code==='content-incomplete'&&e.message.includes('只有修订记录')));
+  assert(errors.some(e=>e.code==='content-incomplete'&&e.line===9));
+});
+test('populated subsections, image-only instructions and directory indexes remain valid',t=>{
+  const f=fixture(t,{...good,'zh/index.md':'# 目录\n',
+    'zh/guide.md':'# 指南\n\n## Installation\n\n### 插入板卡\n\n![接线图](images/board.png)\n\n## Optional notes\n\n<!-- only a comment -->\n'});
+  const result=run(f);
+  assert.deepEqual(result.errors,[]);
+  assert(result.warnings.some(w=>w.code==='content-review'&&w.message.includes('Optional notes')));
+  assert(!result.warnings.some(w=>w.code==='content-review'&&w.message.includes('Installation')));
 });
 test('Git rename evidence preserves a moved and lightly edited document and missing mappings block',t=>{
   const f=fixture(t,{...good,'zh/guide.md':good['zh/guide.md']+'\n这是保留的使用指南说明。\n'.repeat(20)}),previous=run(f).manifest;
