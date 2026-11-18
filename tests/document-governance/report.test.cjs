@@ -48,3 +48,20 @@ test('many changed pages remain individually linked across idempotent continuati
  const all=comments.map(comment=>comment.body).join('\n');for(let i=0;i<400;i++)assert(all.includes('Changed page '+i+' ·'));
  const before=writes;await reportStage(api,input);assert.equal(writes,before);
 });
+
+test('a deployed preview stays linked when browser review fails',async()=>{
+  let comment;
+  const api=async(resource,method='GET',body)=>{
+    if(method==='GET'&&resource.endsWith('/pulls/7'))return {head:{sha}};
+    if(method==='GET')return [];
+    comment=body.body;
+    return {};
+  };
+  await reportStage(api,{repository:'example/governance',event,runId:123,needs:{
+    preview:{result:'success'},
+    'backend-preview':{result:'failure',outputs:{preview_sites:sites,review_status:'failed',review_summary:'1 个页面，阻断 1 项，提醒 0 项'}}
+  }});
+  assert(comment.includes('测试预览复检未通过'));
+  assert(comment.includes('阻断 1 项'));
+  assert(comment.includes('nodepath=a%2Fnew.md'));
+});

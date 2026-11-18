@@ -179,3 +179,23 @@ test('missing image reports quote the preceding sentence and never borrow text a
   ]);
   assert(issue.body.includes('图片前的原文：「The terminal prints:」'));
 });
+
+test('deployed review identifies duplicates at the same placement and empty key sections', () => {
+  const {sectionFindings,navigationFindings} = require('../../scripts/document-governance/review-preview.cjs');
+  const blocks = [
+    {title:'Guide',depth:1,anchor:'guide'},
+    {title:'Overview',depth:2,anchor:'overview'},
+    {title:'Overview',depth:2,anchor:'overview-1'},
+    {content:true},
+    {title:'Another section',depth:2,anchor:'another-section'},
+    {title:'Overview',depth:3,anchor:'overview-2'},
+    {content:true}
+  ];
+  assert.deepEqual(sectionFindings(blocks).map(f=>[f.severity,f.anchor]),[
+    ['warning','overview-1'],['error','overview']
+  ]);
+  const doc = {name:'Guide',sourcePath:'test/guide.md'};
+  const tree = [{name:'Directory A',children:[doc,doc]},{name:'Directory B',children:[doc]}];
+  assert.equal(navigationFindings(tree,['test']).length,1);
+  assert.equal(navigationFindings(tree,['unrelated']).length,0);
+});

@@ -10,9 +10,17 @@ function stageStatus(event,needs) {
   }
   if(event.pull_request?.head.ref.startsWith('document-registration/')&&needs['registration-access']?.result!=='success')return {status:'接入检查失败',message:'请检查来源仓库、分支、语言和分类信息；接入检查通过后再进行首版内容检查与预览。'};
   if(needs.preview?.result!=='success')return {status:'检查失败',message:'正文、资源、目录链接问题回业务仓库修正；分类、迁移与引用登记通过治理 Issue 补充。内容检查已运行时，在工作流摘要及 document-preview Artifact 的 report.md 查看八类逐项结果。'};
-  if(needs['backend-preview']?.result!=='success')return {status:'预览未通过',message:'请查看预览工作流记录并协调修正，保持此 PR 待确认。'};
+  const staging=needs['backend-preview'];
+  if(staging?.result!=='success' && staging?.outputs?.preview_sites) {
+    try {
+      require('./preview-sites.cjs').previewSites(staging.outputs.preview_sites);
+      const details = staging.outputs.review_summary;
+      return {status:'测试预览复检未通过',message:(details ? '复检结果：'+details+'。' : '测试网页已部署，未取得完整复检结果。')+'请打开下方预览，并在工作流摘要查看具体问题。'};
+    } catch { /* Invalid deployment links are handled as a preview failure. */ }
+  }
+  if(staging?.result!=='success')return {status:'预览未通过',message:'请查看预览工作流记录并协调修正，保持此 PR 待确认。'};
   try{require('./preview-sites.cjs').previewSites(needs['backend-preview']?.outputs?.preview_sites);}catch{return {status:'测试预览未就绪',message:'尚未取得可访问的候选测试网链接，保持此 PR 待确认；不能将附件生成成功视为测试部署完成。'};}
-  return {status:'待文档团队确认',message:'自动检查和预览通过，请核对内容、引用关联组、目录子类、语言及版本归档后手动合并。八类逐项结果见工作流摘要及 document-preview Artifact 的 report.md；提醒仍需人工确认。'};
+  return {status:'待文档团队确认',message:(staging.outputs?.review_summary ? '预览复检：'+staging.outputs.review_summary+'。' : '')+'自动检查和预览通过，请核对内容、引用关联组、目录子类、语言及版本归档后手动合并。八类逐项结果见工作流摘要及 document-preview Artifact 的 report.md；提醒仍需人工确认。'};
 }
 async function reportStage(api,{repository,event,needs,runId}) {
   const pr=event.pull_request;if(!pr||pr.head.repo.full_name!==repository)return;
@@ -22,7 +30,7 @@ async function reportStage(api,{repository,event,needs,runId}) {
   const result=stageStatus(event,needs);if(!result)return;
   const marker=`<!-- document-governance-stage:${pr.head.sha} -->`;
   let links='';
-  if(result.status==='待文档团队确认') {
+  if(['待文档团队确认','测试预览复检未通过'].includes(result.status)) {
     const sites=require('./preview-sites.cjs').previewSites(needs['backend-preview'].outputs.preview_sites);
     const url=text=>text.replace(/[()]/g,c=>c==='('?'%28':'%29');
     const label=text=>text.replace(/[\r\n`\[\]<>*\\]/g,' ');
