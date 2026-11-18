@@ -67,8 +67,12 @@ function analyze(text) {
   const {data,body,firstLine} = metadata(text), tokens = md.parse(body,{}), links=[];
   for (const token of tokens) for (const t of tokensOf([token])) {
     if (t.type==='link_open' || t.type==='image') {
-      links.push({href:t.attrGet(t.type==='image'?'src':'href'),image:t.type==='image',
-        line:token.map ? firstLine + token.map[0] : undefined});
+      const image = t.type === 'image';
+      links.push({
+        href: t.attrGet(image ? 'src' : 'href'), image,
+        ...(image ? {alt: t.content.trim()} : {}),
+        line: token.map ? firstLine + token.map[0] : undefined
+      });
     }
   }
   const anchors = new Set(), counts = new Map(), headings=[];

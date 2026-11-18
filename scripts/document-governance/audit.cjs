@@ -148,6 +148,23 @@ async function missingResource(url, fetcher = request) {
   return [404,410].includes(probe.status) ? probe.status : null;
 }
 
+function resourceFinding(link, url, status) {
+  const segment = new URL(url).pathname.split('/').at(-1);
+  let filename = segment;
+  try { filename = decodeURIComponent(segment); } catch { /* Keep the original path spelling. */ }
+  const name = (link.alt ? link.alt.slice(0,160) + '（' + filename + '）' : filename).trim();
+  return {
+    message: link.image
+      ? '正文已读取，引用的图片「' + name + '」加载失败。'
+      : '正文已读取，引用的链接目标「' + name + '」无法访问。',
+    evidence: {
+      stage: link.image ? '读取正文引用的图片' : '访问正文引用的链接目标',
+      kind: link.image ? 'image-not-found' : 'link-target-not-found',
+      status, checkedUrl:url
+    }
+  };
+}
+
 async function audit(out, baseline, pinnedOut) {
   const findings = [], inventory = [], catalog = [], parsed = new Map();
   const add = (category, doc, code, message, line, evidence) => {
@@ -288,7 +305,7 @@ async function audit(out, baseline, pinnedOut) {
         } catch {add('links',doc,'invalid-anchor','链接锚点编码无效。',link.line);}
       } else if (!target.search) {
         const owners = resources.get(target.href) || [];
-        owners.push({doc,line:link.line});
+        owners.push({doc,link});
         resources.set(target.href, owners);
       }
     }
@@ -299,8 +316,10 @@ async function audit(out, baseline, pinnedOut) {
     try {
       const status = await missingResource(url);
       if (status) {
-        for (const owner of owners) add('links',owner.doc,'missing-resource','正文引用的资源无法找到。',owner.line,
-          {stage:'核验正文内资源',kind:'not-found',status,checkedUrl:url});
+        for (const {doc, link} of owners) {
+          const resource = resourceFinding(link,url,status);
+          add('links',doc,'missing-resource',resource.message,link.line,resource.evidence);
+        }
       }
     } catch {
       // Transient failures and HEAD denials do not establish a broken link.
@@ -359,4 +378,4 @@ function auditPinned(out) {
   }
 }
 
-module.exports = {audit, categories, comparePublished, documents, identity, sha, storageUrl, readText, failureDetails, missingResource, location};
+module.exports = {audit, categories, comparePublished, documents, identity, sha, storageUrl, readText, failureDetails, missingResource, resourceFinding, location};

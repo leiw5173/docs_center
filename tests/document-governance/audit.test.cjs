@@ -140,3 +140,22 @@ test('confirmed source issues link to the exact line on the pinned GitHub revisi
     assert.equal(collect(out)[0].url,'https://github.com/example/docs/blob/'+commit+'/zh/guide.md#L11');
   } finally { fs.rmSync(out,{recursive:true,force:true}); }
 });
+
+test('missing image issue identifies its alt text and filename and explains that the document was read', async () => {
+  const {analyze} = require('../../scripts/document-governance/core.cjs');
+  const {resourceFinding} = require('../../scripts/document-governance/audit.cjs');
+  const target = 'https://cdn-resource.spacemit.com/ai/docs-ai/en/static/llamaindex-demo.png';
+  const parsed = analyze('## Usage\n\n![LlamaIndex import verification](' + target + ')');
+  const [image] = parsed.links;
+  let issue;
+  const api = async (_path,method,body) => { if (!method) return []; issue = body; return {}; };
+  await reconcile(api,'sample/docs','https://github.com/sample/docs/actions/runs/1',[
+    {category:'links',code:'missing-resource',language:'en',path:'llamaindex.md',
+      section:'Usage',line:image.line,...resourceFinding(image,target,404)}
+  ]);
+  assert(issue.body.includes('正文已读取，引用的图片「LlamaIndex import verification（llamaindex-demo.png）」加载失败'));
+  assert(issue.body.includes('HTTP 404'));
+  assert(issue.body.includes('补发图片'));
+  assert(!issue.body.includes('撤下失效入口'));
+  assert.match(resourceFinding({image:false},target,404).message,/链接目标/);
+});

@@ -37,7 +37,7 @@ function collect(out) {
 
 const plain = text => String(text || '').replace(/[\r\n]/g,' ').replace(/[<>&\[\]*_~`\\]/g,c=>'\\'+c).replace(/@/g,'＠');
 const categoryAdvice = {
-  links:'打开文档，按报告定位到目标章节或资源地址，确认后修正正文中的引用。',
+  links:'以下问题发生在文档的章节链接或引用资源。先定位文档中引用的位置，再检查目标地址。',
   content:'按文件和章节、行号核对原文，补齐缺失内容或移除无用空标题。',
   titles:'核对标题中的章节编号是否有意保留。',
   references:'核对受影响的引文和目标。目标改名时同步修正文档引用或迁移映射。',
@@ -47,6 +47,8 @@ const categoryAdvice = {
   addresses:'核对旧地址是迁移还是下线，并验证应保留的旧址是否可跳转。'
 };
 const readAdvice = {
+  'image-not-found':'检查 Markdown 图片地址、文件名大小写及图片是否随文档发布。修正图片引用或补发图片。',
+  'link-target-not-found':'核对链接目标地址和发布状态。目标已迁移时，改用有效地址。',
   'not-found':'先核对已发布目录记录的地址与 CDN 对象路径是否一致，特别是 URL 编码。确认对象缺失后检查发布产物或撤下失效入口。',
   'access-denied':'核对 CDN 读取权限和访问规则。当前证据无法判断正文是否存在。',
   'service-error':'检查接口或 CDN 的可用性和限流情况，恢复后复跑。',
