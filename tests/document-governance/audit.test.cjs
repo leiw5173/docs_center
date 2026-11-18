@@ -98,3 +98,45 @@ test('coverage issue names the failed stage and endpoint, then records recovery 
   assert.deepEqual(changes,['POST','PATCH']);
   assert(state[0].body.includes('本次重查未发现'));
 });
+
+test('published Issue links target the heading containing the offending source block', async () => {
+  const {analyze} = require('../../scripts/document-governance/core.cjs');
+  const {portalSections,sectionAt} = require('../../scripts/document-governance/audit-location.cjs');
+  const {location} = require('../../scripts/document-governance/audit.cjs');
+  const markdown = '---\ntitle: Test\n---\n# Test\n\n## 1. **概述**\n\n[Link](#missing)\n\n## 1. 概述\n\nTODO\n';
+  const parsed = analyze(markdown);
+  const sections = portalSections(parsed.headings);
+  const target = sectionAt(sections,parsed.links[0].line);
+  assert.equal(parsed.links[0].line,8);
+  assert.equal(target.title,'1. 概述');
+  assert.equal(target.anchor,'_1-概述');
+  assert.equal(sections.at(-1).anchor,'_1-概述-1');
+
+  const doc = {language:'zh',path:'ubuntu/guide.md'};
+  const href = location(doc,target);
+  assert.equal(new URL(href).searchParams.get('anchor'),'_1-概述');
+  let issue;
+  const api = async (_path,method,body) => { if (!method) return []; issue = body; return {}; };
+  await reconcile(api,'sample/docs','https://github.com/sample/docs/actions/runs/1',[
+    {...doc,category:'links',message:'链接目标不存在',line:8,section:target.title,url:href}
+  ]);
+  assert(issue.body.includes('跳到「1. 概述」'));
+  assert(issue.body.includes(href));
+});
+
+test('confirmed source issues link to the exact line on the pinned GitHub revision', () => {
+  const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+  const {collect} = require('../../scripts/document-governance/audit-issues.cjs');
+  const out = fs.mkdtempSync(path.join(os.tmpdir(),'audit-source-link-'));
+  try {
+    const pinned = path.join(out,'pinned','zh');
+    fs.mkdirSync(pinned,{recursive:true});
+    fs.writeFileSync(path.join(out,'published-report.json'),JSON.stringify({findings:[]}));
+    fs.writeFileSync(path.join(pinned,'report.json'),JSON.stringify({language:'zh',errors:[],checks:[
+      {id:'content',errors:[],warnings:[{repo:'docs',file:'zh/guide.md',code:'content-review',line:11,message:'章节为空'}]}
+    ]}));
+    const commit = 'a'.repeat(40);
+    fs.writeFileSync(path.join(pinned,'manifest.json'),JSON.stringify({scopes:[{repoId:'docs',repository:'example/docs',commit}]}));
+    assert.equal(collect(out)[0].url,'https://github.com/example/docs/blob/'+commit+'/zh/guide.md#L11');
+  } finally { fs.rmSync(out,{recursive:true,force:true}); }
+});

@@ -3,6 +3,7 @@ const path = require('node:path');
 const {spawnSync} = require('node:child_process');
 const {analyze, sha} = require('./core.cjs');
 const {completeness} = require('./completeness.cjs');
+const {portalSections, sectionAt} = require('./audit-location.cjs');
 
 const site = 'https://www.spacemit.com';
 const cdn = 'https://cdn-resource.spacemit.com';
@@ -74,8 +75,11 @@ function documents(nodes, language) {
 
 const identity = doc => doc.language + ':' + doc.path;
 const directory = value => /(?:^|\/)(?:index|readme)\.md$/i.test(value);
-const location = doc => site + '/community/document/info?' +
-  new URLSearchParams({lang:doc.language,nodepath:doc.path});
+function location(doc, section) {
+  const query = new URLSearchParams({lang:doc.language,nodepath:doc.path});
+  if (section) query.set('anchor',section.anchor);
+  return site + '/community/document/info?' + query;
+}
 
 function comparePublished(previous, current, add) {
   if (!previous) return;
@@ -146,10 +150,15 @@ async function missingResource(url, fetcher = request) {
 
 async function audit(out, baseline, pinnedOut) {
   const findings = [], inventory = [], catalog = [], parsed = new Map();
-  const add = (category, doc, code, message, line, evidence) => findings.push({
-    category, language:doc.language, path:doc.path, url:category === 'coverage' && !doc.url ? '' : location(doc),
-    code, message, ...(line ? {line} : {}), ...(evidence ? {evidence} : {})
-  });
+  const add = (category, doc, code, message, line, evidence) => {
+    const section = sectionAt(parsed.get(identity(doc))?.sections || [],line);
+    findings.push({
+      category, language:doc.language, path:doc.path,
+      url:category === 'coverage' && !doc.url ? '' : location(doc,section),
+      code, message, ...(line ? {line} : {}), ...(section ? {section:section.title} : {}),
+      ...(evidence ? {evidence} : {})
+    });
+  };
   const unread = (doc, code, error, stage, url) => {
     const details = failureDetails(error, stage, url);
     add('coverage',doc,code,details.message,null,details);
@@ -194,7 +203,8 @@ async function audit(out, baseline, pinnedOut) {
       let data;
       try { data = analyze(content); }
       catch { throw new ReadFailure('invalid-markdown','正文已下载，但 Markdown 文档元数据无法解析。'); }
-      for (const doc of entries) parsed.set(identity(doc), {doc, data});
+      const sections = portalSections(data.headings);
+      for (const doc of entries) parsed.set(identity(doc), {doc, data, sections});
     } catch (error) {
       const stage = error.kind === 'invalid-markdown' ? '解析正文元数据' : '读取 CDN 正文';
       for (const doc of entries) unread(doc,'body-unavailable',error,stage,url);
@@ -203,7 +213,7 @@ async function audit(out, baseline, pinnedOut) {
 
   console.log('Read ' + parsed.size + ' Markdown bodies');
   const resources = new Map();
-  const byDoc = new Map([...parsed.values()].map(item => [identity(item.doc),item.data]));
+  const hasAnchor = (item, anchor) => item.data.anchors.has(anchor) || item.sections.some(section => section.anchor === anchor);
   const languages = new Set(catalog.map(doc => doc.language));
   for (const {doc, data} of parsed.values()) {
     const references = new Set();
@@ -214,15 +224,19 @@ async function audit(out, baseline, pinnedOut) {
       for (const finding of completeness(data.body, data.firstLine, doc.path)) {
         add('content',doc,finding.blocking ? 'content-incomplete' : 'content-review',finding.message,finding.line);
       }
-      if ([data.data.title || '', ...data.headings.map(h => h.title)].some(title => /^\d+(?:\.\d+)*(?:[.、\s]|$)/.test(title))) {
-        add('titles',doc,'numbered-title','请核对标题开头的章节编号。');
+      const numbered = /^\d+(?:\.\d+)*(?:[.、\s]|$)/;
+      for (const heading of data.headings.filter(h => numbered.test(h.title))) {
+        add('titles',doc,'numbered-title','请核对标题开头的章节编号。',heading.line);
       }
-      if (data.tokens.some(t => t.type === 'ordered_list_open' && Number(t.attrGet('start') || 1) !== 1)) {
-        add('content',doc,'list-start','有序列表从非 1 开始，请核对编号。');
+      if (numbered.test(data.data.title || '') && !data.headings.some(h => h.title === data.data.title)) {
+        add('titles',doc,'numbered-title','请核对文档元数据 title 中的章节编号。');
       }
-      if (data.tokens.some(t => t.type === 'inline' &&
+      for (const token of data.tokens.filter(t => t.type === 'ordered_list_open' && Number(t.attrGet('start') || 1) !== 1)) {
+        add('content',doc,'list-start','有序列表从非 1 开始，请核对编号。',data.firstLine+token.map[0]);
+      }
+      for (const token of data.tokens.filter(t => t.type === 'inline' &&
           /^(?:TODO|TBD|TBA|待补充|待完善|暂缺)[：:。.!…\s]*$/i.test(t.content.trim()))) {
-        add('content',doc,'placeholder','检测到单独的占位文字，请核对。');
+        add('content',doc,'placeholder','检测到单独的占位文字，请核对。',token.map ? data.firstLine+token.map[0] : undefined);
       }
       const peer = doc.language === 'zh' ? 'en' : 'zh';
       if (languages.has(peer) && !byPath.has(peer + ':' + doc.path)) {
@@ -244,7 +258,7 @@ async function audit(out, baseline, pinnedOut) {
           target.hash = hash;
         }
       }
-      catch { add('links',doc,'invalid-url','链接格式无法解析。'); continue; }
+      catch { add('links',doc,'invalid-url','链接格式无法解析。',link.line); continue; }
       const hash = target.hash;
       target.hash = '';
       if (target.origin === site && target.pathname === '/community/document/info') {
@@ -253,11 +267,11 @@ async function audit(out, baseline, pinnedOut) {
         const key = (target.searchParams.get('lang') || doc.language) + ':' + targetPath;
         references.add(key);
         if (!byPath.has(key)) {
-          add('references',doc,'unknown-reference','目标文档未在当前目录中找到：' + targetPath);
+          add('references',doc,'unknown-reference','目标文档未在当前目录中找到：' + targetPath,link.line);
         } else {
           const anchor = target.searchParams.get('anchor');
-          if (anchor && byDoc.has(key) && !byDoc.get(key).anchors.has(anchor)) {
-            add('links',doc,'missing-anchor','目标章节不存在：' + targetPath + '#' + anchor);
+          if (anchor && parsed.has(key) && !hasAnchor(parsed.get(key),anchor)) {
+            add('links',doc,'missing-anchor','目标章节不存在：' + targetPath + '#' + anchor,link.line);
           }
         }
         continue;
@@ -268,13 +282,13 @@ async function audit(out, baseline, pinnedOut) {
         references.add(identity(known));
         if (!hash || !parsed.has(identity(known))) continue;
         try {
-          if (!parsed.get(identity(known)).data.anchors.has(decodeURIComponent(hash.slice(1)))) {
-            add('links',doc,'missing-anchor','目标章节不存在：' + known.path + hash);
+          if (!hasAnchor(parsed.get(identity(known)),decodeURIComponent(hash.slice(1)))) {
+            add('links',doc,'missing-anchor','目标章节不存在：' + known.path + hash,link.line);
           }
-        } catch {add('links',doc,'invalid-anchor','链接锚点编码无效。');}
+        } catch {add('links',doc,'invalid-anchor','链接锚点编码无效。',link.line);}
       } else if (!target.search) {
         const owners = resources.get(target.href) || [];
-        owners.push(doc);
+        owners.push({doc,line:link.line});
         resources.set(target.href, owners);
       }
     }
@@ -285,7 +299,7 @@ async function audit(out, baseline, pinnedOut) {
     try {
       const status = await missingResource(url);
       if (status) {
-        for (const doc of owners) add('links',doc,'missing-resource','正文引用的资源无法找到。',null,
+        for (const owner of owners) add('links',owner.doc,'missing-resource','正文引用的资源无法找到。',owner.line,
           {stage:'核验正文内资源',kind:'not-found',status,checkedUrl:url});
       }
     } catch {
@@ -345,4 +359,4 @@ function auditPinned(out) {
   }
 }
 
-module.exports = {audit, categories, comparePublished, documents, identity, sha, storageUrl, readText, failureDetails, missingResource};
+module.exports = {audit, categories, comparePublished, documents, identity, sha, storageUrl, readText, failureDetails, missingResource, location};

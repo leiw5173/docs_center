@@ -22,7 +22,7 @@ function collect(out) {
         seen.add(finding.code);
         const scope = manifest.scopes.find(scope => scope.repoId === finding.repo);
         const url = scope && finding.file?.startsWith(pinned.language + '/')
-          ? 'https://github.com/' + scope.repository + '/blob/' + scope.commit + '/' + finding.file.split('/').map(encodeURIComponent).join('/')
+          ? 'https://github.com/' + scope.repository + '/blob/' + scope.commit + '/' + finding.file.split('/').map(encodeURIComponent).join('/') + (finding.line ? '#L' + finding.line : '')
           : '';
         findings.push({...finding,category:check.id,language:pinned.language,path:finding.file || finding.repo,url});
       }
@@ -63,7 +63,7 @@ const readAdvice = {
 
 const link = url => url.replace(/[()]/g, c => c === '(' ? '%28' : '%29');
 function line(finding) {
-  const label = plain([finding.language,finding.path].filter(Boolean).join(' '));
+  const label = plain([finding.language,finding.path,finding.section && '跳到「'+finding.section+'」'].filter(Boolean).join(' · '));
   const document = finding.url ? '['+label+']('+link(finding.url)+')' : label;
   const result = document + (finding.line ? ' · 第 '+finding.line+' 行' : '') + ' · ' + plain(finding.message).slice(0,400);
   const evidence = finding.evidence;

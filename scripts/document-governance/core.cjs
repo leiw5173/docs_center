@@ -65,11 +65,17 @@ function metadata(text) {
 function tokensOf(tokens) { return tokens.flatMap(t=>[t,...tokensOf(t.children||[])]); }
 function analyze(text) {
   const {data,body,firstLine} = metadata(text), tokens = md.parse(body,{}), links=[];
-  for (const t of tokensOf(tokens)) if (t.type==='link_open' || t.type==='image') links.push({href:t.attrGet(t.type==='image'?'src':'href'),image:t.type==='image'});
+  for (const token of tokens) for (const t of tokensOf([token])) {
+    if (t.type==='link_open' || t.type==='image') {
+      links.push({href:t.attrGet(t.type==='image'?'src':'href'),image:t.type==='image',
+        line:token.map ? firstLine + token.map[0] : undefined});
+    }
+  }
   const anchors = new Set(), counts = new Map(), headings=[];
   for(let i=0;i<tokens.length;i++) if(tokens[i].type==='heading_open') {
     const title=tokens[i+1].content, base=title.toLowerCase().replace(/[^\p{L}\p{N}_\s-]/gu,'').replace(/\s/g,'-');
-    const n=counts.get(base)||0;counts.set(base,n+1);anchors.add(base+(n?`-${n}`:''));headings.push({title,level:tokens[i].tag});
+    const n=counts.get(base)||0;counts.set(base,n+1);anchors.add(base+(n?`-${n}`:''));headings.push({title,level:tokens[i].tag,line:firstLine+tokens[i].map[0],
+      displayTitle:tokens[i+1].children.map(t=>t.type==='softbreak'?' ':['text','code_inline'].includes(t.type)?t.content:'').join('')});
     tokens[i].attrSet('id',base+(n?`-${n}`:''));
   }
   return {data,body,firstLine,tokens,links,anchors,headings,html:md.renderer.render(tokens,md.options,{})};
@@ -88,7 +94,7 @@ function build({registry,roots,revisions,language,previous=null,overrides={}}) {
   validateRegistry(registry); if(!['zh','en'].includes(language))throw Error('Invalid language');
   const errors=[], warnings=[], scopes=[], pages=new Map();
   const oldDocs=new Map((previous?.scopes||[]).flatMap(s=>s.documents.map(d=>[`${s.repoId}/${d.path}`,d])));
-  const issue=(list,repo,file,code,message)=>list.push({repo,file,code,message});
+  const issue=(list,repo,file,code,message,line)=>list.push({repo,file,code,message,...(line ? {line} : {})});
   for(const r of registry.repositories.filter(r=>r.languages.includes(language))) {
     const revision=revisions[r.id], source=snapshot(roots[r.id],revision), parsed=new Map();
     const files=[...source.keys()].filter(f=>f.startsWith(`${language}/`)&&f.endsWith('.md')&&!f.split('/').some(p=>p.startsWith('.'))).sort();
@@ -111,23 +117,30 @@ function build({registry,roots,revisions,language,previous=null,overrides={}}) {
       if (/\b(?:TODO|TBD)\b|待补充|待完善/.test(visibleText)) {
         issue(warnings,r.id,file,'content-review','Content contains a placeholder; document team must review completeness');
       }
-      if([...a.headings.map(h=>h.title),a.data.title||''].some(title=>/^\d+(?:\.\d+)*(?:[.、\s]|$)/.test(title)))issue(warnings,r.id,file,'numbered-title','Review numeric chapter prefix');
-      for(const t of a.tokens)if(t.type==='ordered_list_open' && t.attrGet('start') && t.attrGet('start')!=='1')issue(warnings,r.id,file,'list-start','Ordered list does not start at 1');
+      const numberedTitle = /^\d+(?:\.\d+)*(?:[.、\s]|$)/;
+      const numberedHeading = a.headings.find(heading => numberedTitle.test(heading.title));
+      if (numberedHeading || numberedTitle.test(a.data.title || '')) {
+        issue(warnings,r.id,file,'numbered-title','Review numeric chapter prefix',numberedHeading?.line);
+      }
+      for(const t of a.tokens)if(t.type==='ordered_list_open' && t.attrGet('start') && t.attrGet('start')!=='1')issue(warnings,r.id,file,'list-start','Ordered list does not start at 1',t.map ? a.firstLine+t.map[0] : undefined);
       if(!source.has(file.replace(new RegExp(`^${language}/`),language==='zh'?'en/':'zh/')))issue(warnings,r.id,file,'translation','Other language counterpart is missing; release remains independent');
       let dir=path.posix.dirname(file);while(dir!=='.') {if(!source.has(`${dir}/index.md`))issue(errors,r.id,file,'index',`Missing ${dir}/index.md`);if(dir===language)break;dir=path.posix.dirname(dir);}
       const references=[];
-      for(const link of a.links)try {
-        const registered=(overrides.references||{})[`${r.id}/${file}::${link.href}`];
-        if(registered){references.push(registered);continue;}
-        const target=localTarget(file,link.href);
-        if(!target){if(link.image)issue(errors,r.id,file,'external-resource','External images must be moved into the pinned business source');else if(/^https?:/i.test(link.href)){if(/\.md(?:[?#]|$)|\/community\/document\//i.test(link.href))issue(errors,r.id,file,'reference-registration',`Register document reference: ${link.href}`);else issue(warnings,r.id,file,'external-link',`Review external link: ${link.href}`);}continue;}
-        if(!source.has(target.path)) {issue(errors,r.id,file,'broken-link',`Missing ${target.path}`);continue;}
-        if(target.path.endsWith('.md')) {
-          references.push(`${r.id}/${target.path}`);
-          if(!target.path.startsWith(`${language}/`))issue(errors,r.id,file,'cross-language','Referenced language must be released in the same group; independent release cannot resolve this link');
-          if(target.anchor && !parsed.get(target.path)?.anchors.has(target.anchor))issue(errors,r.id,file,'anchor',`Missing anchor ${target.path}#${target.anchor}`);
-        } else {const bytes=source.get(target.path).read();assets.set(target.path,{path:target.path,sha256:sha(bytes)});}
-      }catch(e){issue(errors,r.id,file,'link',e.message);}
+      for (const link of a.links) {
+        const report = (list, code, message) => issue(list,r.id,file,code,message,link.line);
+        try {
+          const registered=(overrides.references||{})[`${r.id}/${file}::${link.href}`];
+          if(registered){references.push(registered);continue;}
+          const target=localTarget(file,link.href);
+          if(!target){if(link.image)report(errors,'external-resource','External images must be moved into the pinned business source');else if(/^https?:/i.test(link.href)){if(/\.md(?:[?#]|$)|\/community\/document\//i.test(link.href))report(errors,'reference-registration',`Register document reference: ${link.href}`);else report(warnings,'external-link',`Review external link: ${link.href}`);}continue;}
+          if(!source.has(target.path)) {report(errors,'broken-link',`Missing ${target.path}`);continue;}
+          if(target.path.endsWith('.md')) {
+            references.push(`${r.id}/${target.path}`);
+            if(!target.path.startsWith(`${language}/`))report(errors,'cross-language','Referenced language must be released in the same group; independent release cannot resolve this link');
+            if(target.anchor && !parsed.get(target.path)?.anchors.has(target.anchor))report(errors,'anchor',`Missing anchor ${target.path}#${target.anchor}`);
+          } else {const bytes=source.get(target.path).read();assets.set(target.path,{path:target.path,sha256:sha(bytes)});}
+        } catch (error) { report(errors,'link',error.message); }
+      }
       const doc={path:file,sha256:fileHash,title:a.data.title||h1[0]?.title||path.posix.basename(file),sidebarPosition:a.data.sidebar_position??null,softwareVersion:a.data.software_version??null,references:[...new Set(references)].sort()};
       docs.push(doc);pages.set(`${r.id}/${file}`,{...a,source,repo:r,revision,file});
     }
