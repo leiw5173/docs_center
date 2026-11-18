@@ -15,7 +15,7 @@ function fixture(t,files){
 }
 const registration={id:'test',repository:'example/docs-test',prefix:'software/test',rootDep:1,branch:'main',column:'os',languages:['zh','en']};
 const registry={schemaVersion:1,repositories:[registration]};
-const good={'zh/index.md':'---\nsidebar_position: 2\n---\n# 测试目录\n\n[指南](guide.md#安装)\n','zh/guide.md':'# 指南\n\n## 安装\n\n正文。![board](images/board.png)\n','zh/images/board.png':'synthetic image'};
+const good={'zh/index.md':'---\nsidebar_position: 2\n---\n# 测试目录\n\n这里介绍如何安装板卡和检查接线。\n\n[指南](guide.md#安装)\n','zh/guide.md':'# 指南\n\n## 安装\n\n正文。![board](images/board.png)\n','zh/images/board.png':'synthetic image'};
 function run(f,extra={}){return build({registry,roots:{test:f.root},revisions:{test:f.commit},language:'zh',...extra});}
 test('candidate reads exact commit, preserves dirty source, checks resource and reference hashes',t=>{
   const f=fixture(t,good);fs.writeFileSync(path.join(f.root,'zh/guide.md'),'# Dirty unapproved body');
@@ -47,7 +47,7 @@ test('Chinese translation reminders do not require an English release; explicit 
   const r=run(f);assert.equal(r.manifest.scopes.length,1);assert(r.errors.some(e=>e.code==='cross-language'));
 });
 test('release conservatively includes all registered sources and cross-repository references',t=>{
-  const a=fixture(t,{...good,'zh/guide.md':'# Guide\n\n## 安装\n\n[next](https://example.invalid/other.md)'}),b=fixture(t,{'zh/index.md':'# Other'});
+  const a=fixture(t,{...good,'zh/guide.md':'# Guide\n\n## 安装\n\n[next](https://example.invalid/other.md)'}),b=fixture(t,{'zh/index.md':'# Other\n\nThis directory covers hardware setup.'});
   const second={...registration,id:'second',repository:'example/other',prefix:'software/other'};
   const r=build({registry:{schemaVersion:1,repositories:[registration,second]},roots:{test:a.root,second:b.root},revisions:{test:a.commit,second:b.commit},language:'zh',overrides:{references:{'test/zh/guide.md::https://example.invalid/other.md':'second/zh/index.md'}}});
   assert.equal(r.manifest.scopes.length,2);assert.deepEqual(r.errors,[]);assert.deepEqual(r.manifest.scopes[0].documents.find(d=>d.path==='zh/guide.md').references,['second/zh/index.md']);
@@ -93,7 +93,7 @@ test('a bare sidebar position at the start does not count as guide content',t=>{
   assert(errors.some(e=>e.code==='content-incomplete'&&e.line===9));
 });
 test('populated subsections, image-only instructions and directory indexes remain valid',t=>{
-  const f=fixture(t,{...good,'zh/index.md':'# 目录\n',
+  const f=fixture(t,{...good,'zh/index.md':'# 目录\n\n介绍板卡接线和安装时的注意事项。\n',
     'zh/guide.md':'# 指南\n\n## Installation\n\n### 插入板卡\n\n![接线图](images/board.png)\n\n## Optional notes\n\n<!-- only a comment -->\n'});
   const result=run(f);
   assert.deepEqual(result.errors,[]);
@@ -168,4 +168,20 @@ test('an existing Markdown link can keep the old file path while the mapped chap
   f.commit=f.git('rev-parse','HEAD');
   const broken=run(f,{previous,overrides:{redirects:result.manifest.redirects}});
   assert(broken.warnings.some(error=>error.code==='redirect-anchor'&&error.file==='zh/ref.md'));
+});
+
+test('a directory index needs introductory prose and unchanged link-only indexes remain reviewable',t=>{
+  const file='zh/index.md', links='# 目录\n\n请查看以下文档：\n\n- [安装](guide.md)\n';
+  const f=fixture(t,{...good,[file]:links});
+  const first=run(f);
+  const isIntroduction=finding=>finding.file===file&&finding.code==='directory-introduction';
+  assert(first.errors.some(isIntroduction));
+  const unchanged=run(f,{previous:first.manifest});
+  assert(!unchanged.errors.some(isIntroduction));
+  assert(unchanged.warnings.some(isIntroduction));
+  const {hasDirectoryIntroduction}=require('../../scripts/document-governance/completeness.cjs');
+  assert(!hasDirectoryIntroduction('# Setup\n\n[Installation](guide.md)\n\n<!-- later -->'));
+  assert(!hasDirectoryIntroduction('# Setup\n\n## Revision history\n\nFirst edition'));
+  assert(!hasDirectoryIntroduction('# Setup\n\nTODO'));
+  assert(hasDirectoryIntroduction('# Setup\n\nUse these guides to install the board, connect a display, and verify its first boot.'));
 });

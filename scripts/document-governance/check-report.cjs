@@ -6,7 +6,7 @@ function checkReport(result) {
     ['titles','标题数字',['numbered-title'],'核对标题中 6.1 等章节编号是否需要去掉。'],
     ['versions','版本与旧版归档',['version'],'逐项确认是否需要升级软件版本、保留旧版并完成归档；检查不会自动升级或归档。'],
     ['translations','中英文缺失',['translation'],'缺少对应语言仅提醒，不阻断当前语言发布。'],
-    ['directories','目录介绍',['index'],'每个含文档的目录须有 index.md；介绍、目录链接及排序需人工核对。'],
+    ['directories','目录介绍',['index','directory-introduction'],'新增或修改的 index.md 须有目录介绍段落；已发布的缺失项先提醒，介绍是否贴合本目录由人工核对。'],
     ['addresses','地址变更与旧链接跳转',['address-change','redirect','address-migration-required','redirect-anchor','reference-group','cross-language'],'在候选测试网页核对旧链接、新地址及受影响的引用文档。']
   ];
   const documents=m=>new Map((m?.scopes||[]).flatMap(s=>s.documents.map(d=>[`${s.repoId}/${d.path}`,d])));

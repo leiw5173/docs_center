@@ -1,4 +1,4 @@
-const {completeness} = require('./completeness.cjs');
+const {completeness,hasDirectoryIntroduction} = require('./completeness.cjs');
 // No network or production writes: read immutable Git blobs, check, and build previews.
 const {execFileSync} = require('node:child_process');
 const fs = require('node:fs');
@@ -128,6 +128,11 @@ function build({registry,roots,revisions,language,previous=null,overrides={}}) {
       const visibleText=tokensOf(a.tokens).filter(t=>t.type==='text').map(t=>t.content).join('\n');
       const fileHash = sha(source.get(file).read());
       const changed = oldDocs.get(`${r.id}/${file}`)?.sha256 !== fileHash;
+      if (path.posix.basename(file)==='index.md' && !hasDirectoryIntroduction(a.body)) {
+        issue(changed?errors:warnings,r.id,file,'directory-introduction',
+          '请在 index.md 写一段目录介绍，说明本目录涵盖哪些主题、适合什么任务。标题、链接列表或占位文字不能代替介绍。',
+          h1[0]?.line || a.firstLine);
+      }
       for (const finding of completeness(a.body, a.firstLine, file)) {
         const blocking = finding.blocking && changed;
         (blocking ? errors : warnings).push({
