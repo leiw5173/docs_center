@@ -108,11 +108,11 @@ test('Git rename evidence preserves a moved and lightly edited document and miss
   f.git('add','.');f.git('-c','user.name=Test','-c','user.email=test@example.invalid','commit','--quiet','-m','rename');f.commit=f.git('rev-parse','HEAD');
   const result=run(f,{previous});assert.deepEqual(result.errors,[]);assert.equal(result.manifest.redirects['test/zh/guide.md'],'test/zh/renamed.md');
 });
-test('eight-category report keeps blockers, translation reminders, and first-onboarding limits visible',t=>{
+test('release check report keeps blockers, translation reminders, and first-onboarding limits visible',t=>{
   const f=fixture(t,{...good,'zh/guide.md':'# 6.1 Guide\n\n3. 待补充\n\n[坏链接](#不存在)\n','zh/child/page.md':'# Page\n\n正文'});
   const r=run(f),out=path.join(f.root,'report');writePreview(r,out);
   const report=JSON.parse(fs.readFileSync(path.join(out,'report.json')));
-  assert.equal(report.checks.length,8);assert.equal(report.hasBaseline,false);
+  assert.equal(report.checks.length,7);assert.equal(report.hasBaseline,false);
   assert.equal(report.checks.find(c=>c.id==='links').status,'blocked');
   assert.equal(report.checks.find(c=>c.id==='directories').status,'blocked');
   assert.equal(report.checks.find(c=>c.id==='translations').status,'review');
@@ -148,4 +148,24 @@ test('registration issue fields are typed inputs and do not require editing JSON
   const {registrationFromIssue}=require('../../scripts/document-governance/run.cjs');
   const entry=registrationFromIssue('### 登记 ID\n\ntest\n\n### 来源仓库\n\nexample/docs-test\n\n### 分支\n\nmain\n\n### 目标路径前缀\n\nsoftware/test\n\n### 目录层级 rootDep\n\n1\n\n### 目标栏目\n\nos\n\n### 语言\n\nzh, en\n');
   assert.deepEqual(entry,registration);validateRegistry({schemaVersion:1,repositories:[entry]});
+});
+
+test('an existing Markdown link can keep the old file path while the mapped chapter remains valid',t=>{
+  const f=fixture(t,{'zh/index.md':'# Index','zh/old.md':'# Guide\n\n## Install\n\nDo this.',
+    'zh/ref.md':'# Ref\n\n## Setup\n\n[Reference](old.md#install)'});
+  const previous=run(f).manifest;
+  fs.renameSync(path.join(f.root,'zh/old.md'),path.join(f.root,'zh/new.md'));
+  f.git('add','.');f.git('-c','user.name=Test','-c','user.email=test@example.invalid','commit','--quiet','-m','move');
+  f.commit=f.git('rev-parse','HEAD');
+  const result=run(f,{previous});
+  assert.deepEqual(result.errors,[]);
+  assert.deepEqual(result.manifest.scopes[0].documents.find(doc=>doc.path==='zh/ref.md').references,['test/zh/new.md']);
+  assert.deepEqual(result.migrationReferences,[{
+    document:'test/zh/ref.md',target:'test/zh/old.md',anchor:'install',line:5,section:'Setup',sectionAnchor:'setup'
+  }]);
+  fs.writeFileSync(path.join(f.root,'zh/new.md'),'# Guide\n\n## Configure\n\nDo this.');
+  f.git('add','.');f.git('-c','user.name=Test','-c','user.email=test@example.invalid','commit','--quiet','-m','rename section');
+  f.commit=f.git('rev-parse','HEAD');
+  const broken=run(f,{previous,overrides:{redirects:result.manifest.redirects}});
+  assert(broken.warnings.some(error=>error.code==='redirect-anchor'&&error.file==='zh/ref.md'));
 });

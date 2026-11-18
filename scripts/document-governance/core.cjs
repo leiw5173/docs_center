@@ -8,6 +8,7 @@ const MarkdownIt = require('markdown-it');
 const yaml = require('js-yaml');
 const {checkReport,reportMarkdown}=require('./check-report.cjs');
 const {migrations}=require('./migrations.cjs');
+const {directoryMetadata}=require('./preview-sites.cjs');
 const md = new MarkdownIt({html: false, linkify: false});
 const sha = data => crypto.createHash('sha256').update(data).digest('hex');
 const escape = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -112,7 +113,7 @@ function localTarget(file, href) {
 }
 function build({registry,roots,revisions,language,previous=null,overrides={}}) {
   validateRegistry(registry); if(!['zh','en'].includes(language))throw Error('Invalid language');
-  const errors=[], warnings=[], scopes=[], pages=new Map();
+  const errors=[], warnings=[], scopes=[], pages=new Map(), pendingReferences=[];
   const oldDocs=new Map((previous?.scopes||[]).flatMap(s=>s.documents.map(d=>[`${s.repoId}/${d.path}`,d])));
   const issue=(list,repo,file,code,message,line)=>list.push({repo,file,code,message,...(line ? {line} : {})});
   for(const r of registry.repositories.filter(r=>r.languages.includes(language))) {
@@ -150,10 +151,20 @@ function build({registry,roots,revisions,language,previous=null,overrides={}}) {
         const report = (list, code, message) => issue(list,r.id,file,code,message,link.line);
         try {
           const registered=(overrides.references||{})[`${r.id}/${file}::${link.href}`];
-          if(registered){references.push(registered);continue;}
+          if(registered){
+            const url=new URL(link.href,'https://document-center.invalid');
+            const anchor=url.searchParams.get('anchor')||decodeURIComponent(url.hash.slice(1));
+            pendingReferences.push({repo:r.id,file,target:registered,anchor,line:link.line,registered:true});
+            continue;
+          }
           const target=localTarget(file,link.href);
           if(!target){if(link.image)report(errors,'external-resource','External images must be moved into the pinned business source');else if(/^https?:/i.test(link.href)){if(/\.md(?:[?#]|$)|\/community\/document\//i.test(link.href))report(errors,'reference-registration',`Register document reference: ${link.href}`);else report(warnings,'external-link',`Review external link: ${link.href}`);}continue;}
-          if(!source.has(target.path)) {report(errors,'broken-link',`Missing ${target.path}`);continue;}
+          if(!source.has(target.path)) {
+            if(!link.image&&target.path.endsWith('.md')) {
+              pendingReferences.push({repo:r.id,file,target:r.id+'/'+target.path,anchor:target.anchor,line:link.line});
+            } else report(errors,'broken-link',`Missing ${target.path}`);
+            continue;
+          }
           if(target.path.endsWith('.md')) {
             references.push(`${r.id}/${target.path}`);
             if(!target.path.startsWith(`${language}/`))report(errors,'cross-language','Referenced language must be released in the same group; independent release cannot resolve this link');
@@ -168,12 +179,31 @@ function build({registry,roots,revisions,language,previous=null,overrides={}}) {
   }
   if(!scopes.length)throw Error('No repositories registered for selected language');
   const newDocs=new Map(scopes.flatMap(s=>s.documents.map(d=>[`${s.repoId}/${d.path}`,d])));
+  const migration=migrations(scopes,previous,overrides.redirects,roots);errors.push(...migration.errors);
+  const migrationReferences=[];
+  for(const reference of pendingReferences) {
+    const {repo,file,target,anchor,line,registered}=reference;
+    const id=repo+'/'+file, moved=migration.redirects[target], resolved=moved||target;
+    const doc=newDocs.get(id);
+    if (registered || newDocs.has(resolved)) doc.references=[...new Set([...doc.references,resolved])].sort();
+    if(!newDocs.has(resolved)) {
+      if (!registered) issue(errors,repo,file,'broken-link',`Missing referenced document: ${target}`,line);
+      continue;
+    }
+    if (!moved) continue;
+    const sourcePage=pages.get(id);
+    const headingIndex=sourcePage.headings.findLastIndex(heading=>heading.line<=line);
+    migrationReferences.push({document:id,target,anchor,line,section:sourcePage.headings[headingIndex]?.displayTitle,
+      sectionAnchor:[...sourcePage.anchors][headingIndex]});
+    if(anchor&&!pages.get(resolved)?.anchors.has(anchor)) {
+      issue(directoryMetadata(target)||directoryMetadata(resolved)?errors:warnings,repo,file,'redirect-anchor',`Missing migrated anchor: ${target}#${anchor} → ${resolved}#${anchor}`,line);
+    }
+  }
   for(const scope of scopes)for(const doc of scope.documents)for(const target of doc.references)if(!newDocs.has(target))issue(errors,scope.repoId,doc.path,'reference-group',`Reference outside complete release group: ${target}`);
   for(const [id,old]of oldDocs)if(!newDocs.has(id))issue(warnings,id.split('/')[0],id,'address-change','Removed document: review redirects, references and archive');else if(old.softwareVersion!==newDocs.get(id).softwareVersion)issue(warnings,id.split('/')[0],id,'version','Version changed: review old version archive');
-  const migration=migrations(scopes,previous,overrides.redirects,roots);errors.push(...migration.errors);
   for(const [id,labels]of Object.entries(overrides.labels||{}))if(!newDocs.has(id)||!Array.isArray(labels)||labels.some(x=>typeof x!=='string'||!x.trim()||x.length>100))issue(errors,'',id,'labels','Labels must belong to a released document and be a list of text values');
   const manifest={schemaVersion:1,language,scopes,references:overrides.references||{},redirects:migration.redirects,labels:overrides.labels||{},feedback:overrides.feedback||[],reviewRequired:['content-completeness','references','version-archive','translations','directory-order','address-migration'],warnings};
-  return {manifest,digest:sha(JSON.stringify(manifest)),errors,warnings,pages,previous};
+  return {manifest,digest:sha(JSON.stringify(manifest)),errors,warnings,pages,previous,migrationReferences};
 }
 function writePreview(result,out) {
   fs.mkdirSync(out,{recursive:true});
@@ -183,9 +213,9 @@ function writePreview(result,out) {
     for(const t of tokensOf(tokens))if(t.type==='link_open'||t.type==='image') {
       const href=t.attrGet(t.type==='image'?'src':'href');
       const registered=(result.manifest.references||{})[`${key}::${href}`];
-      if(registered){t.attrSet('href',path.posix.relative(path.posix.dirname(`${key}.html`),`${registered}.html`));continue;}
+      if(registered){t.attrSet('href',path.posix.relative(path.posix.dirname(`${key}.html`),`${result.manifest.redirects[registered]||registered}.html`));continue;}
       const attr=t.type==='image'?'src':'href';let target;try{target=localTarget(p.file,t.attrGet(attr));}catch{continue;}if(!target)continue;
-      if(target.path.endsWith('.md'))t.attrSet(attr,path.posix.relative(path.posix.dirname(`${key}.html`),`${p.repo.id}/${target.path}.html`)+(target.anchor?`#${encodeURIComponent(target.anchor)}`:''));
+      if(target.path.endsWith('.md'))t.attrSet(attr,path.posix.relative(path.posix.dirname(`${key}.html`),`${result.manifest.redirects[p.repo.id+'/'+target.path]||p.repo.id+'/'+target.path}.html`)+(target.anchor?`#${encodeURIComponent(target.anchor)}`:''));
       else {
         const asset=path.posix.join(p.repo.id,target.path), dest=path.join(out,asset);fs.mkdirSync(path.dirname(dest),{recursive:true});fs.writeFileSync(dest,p.source.get(target.path)?.read()||'');
         t.attrSet(attr,path.posix.relative(path.posix.dirname(`${key}.html`),asset));

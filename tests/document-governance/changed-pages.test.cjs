@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
-const {changedPages,previewSites}=require('../../scripts/document-governance/preview-sites.cjs');
+const {changedPages,previewSites,migrationPreviews}=require('../../scripts/document-governance/preview-sites.cjs');
 const digest='b'.repeat(64),url=`https://preview.example/community/document?preview=${digest}&lang=zh`;
 const doc=(path,sha256=path)=>({path,sha256,title:path,sidebarPosition:1,softwareVersion:null,references:[]});
 const scope=(repoId,documents)=>({repoId,prefix:repoId,rootDep:1,column:'cases',language:'zh',documents});
@@ -29,4 +29,20 @@ test('comment inputs cannot restore internal index or readme links as pages or m
   assert.throws(()=>previewSites([{...site,pages:[{title:name,path:'zh/'+name,sourcePath:'a/'+name,change:'modified',url:link.href}]}]));
   assert.throws(()=>previewSites([{...site,redirects:[{from:'a/zh/'+name,to:'a/zh/new.md',sourcePath:'a/'+name,targetPath:'a/new.md',url:link.href}]}]));
  }
+});
+
+test('a migration links current and previous reference documents, with exact sections for surviving links',()=>{
+ const old='a/zh/old.md',next='a/zh/new.md',reference='a/zh/reference.md';
+ const previous={scopes:[scope('a',[doc('zh/old.md'),{...doc('zh/reference.md'),references:[old]},
+   {...doc('zh/indirect.md'),references:[reference]},doc('zh/index.md')])]};
+ const manifest={language:'zh',scopes:[scope('a',[doc('zh/new.md'),doc('zh/reference.md'),doc('zh/indirect.md')])],
+   redirects:{[old]:next}};
+ const evidence=[{target:old,document:reference,anchor:'install',line:12,section:'Setup',sectionAnchor:'setup'}];
+ const [move]=migrationPreviews(manifest,previous,url,evidence);
+ assert.deepEqual(move.anchors,['install']);
+ assert.deepEqual(move.references.map(ref=>[ref.id,ref.direct]),[[reference,true],['a/zh/indirect.md',false]]);
+ assert.equal(new URL(move.references[0].url).searchParams.get('anchor'),'setup');
+ assert.equal(move.references[0].line,12);
+ assert.equal(new URL(move.targetUrl).searchParams.get('nodepath'),'a/new.md');
+ assert.doesNotThrow(()=>previewSites([{language:'zh',digest,url,pages:[],redirects:[move]}]));
 });

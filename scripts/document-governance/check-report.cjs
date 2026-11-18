@@ -4,11 +4,10 @@ function checkReport(result) {
     ['links','页内及文档链接',['broken-link','anchor','link','external-resource','external-link','reference-registration'],'外部网站有效性需人工核对。'],
     ['content','内容完整性及序号',['metadata','empty-source','incomplete','content-incomplete','content-review','list-start'],'核对缺章、占位内容及列表是否应从 1 开始；自动检查不能证明语义完整。'],
     ['titles','标题数字',['numbered-title'],'核对标题中 6.1 等章节编号是否需要去掉。'],
-    ['references','引用影响',['reference-group','cross-language'],'核对下列直接、间接引用者；自动检查只覆盖已登记来源和可解析链接。'],
     ['versions','版本与旧版归档',['version'],'逐项确认是否需要升级软件版本、保留旧版并完成归档；检查不会自动升级或归档。'],
     ['translations','中英文缺失',['translation'],'缺少对应语言仅提醒，不阻断当前语言发布。'],
     ['directories','目录介绍',['index'],'每个含文档的目录须有 index.md；介绍、目录链接及排序需人工核对。'],
-    ['addresses','文档地址变更',['address-change','redirect','address-migration-required'],'确定的迁移自动登记并在发布后跳转；无法唯一确定目标的旧地址阻断发布。']
+    ['addresses','地址变更与旧链接跳转',['address-change','redirect','address-migration-required','redirect-anchor','reference-group','cross-language'],'在候选测试网页核对旧链接、新地址及受影响的引用文档。']
   ];
   const documents=m=>new Map((m?.scopes||[]).flatMap(s=>s.documents.map(d=>[`${s.repoId}/${d.path}`,d])));
   const before=documents(result.previous),after=documents(result.manifest);
@@ -37,7 +36,7 @@ function checkReport(result) {
     return {id,title,status:errors.length?'blocked':warnings.length?'review':'no-automatic-findings',errors,warnings,review};
   });
   return {digest:result.digest,language:result.manifest.language,hasBaseline:before.size>0,
-    errors:result.errors,warnings:result.warnings,checks,referenceImpact,versionReview,
+    errors:result.errors,warnings:result.warnings,checks,referenceImpact,versionReview,migrationReferences:result.migrationReferences||[],
     addresses:{added,removed,redirects:result.manifest.redirects||{}}};
 }
 function reportMarkdown(report) {
@@ -51,13 +50,14 @@ function reportMarkdown(report) {
     lines.push(`- ${severity} · ${c.title} · ${text(issue.repo||'')}/${text(issue.file||'')}：${text(issue.message)}`);
   const listed=new Set(report.checks.flatMap(c=>[...c.errors,...c.warnings]));
   for(const issue of report.errors.filter(e=>!listed.has(e)))lines.push(`- 其他阻断 · ${text(issue.code)}：${text(issue.message)}`);
-  lines.push('','### 引用影响','');
+  lines.push('','### 地址变更与引用影响明细','');
   for(const item of report.referenceImpact)lines.push(`- ${text(item.document)}：直接引用者 ${item.direct.map(text).join('、')||'无'}；间接引用者 ${item.indirect.map(text).join('、')||'无'}`);
   if(!report.referenceImpact.length)lines.push('无历史文档修改或删除；首次接入仍需核对登记范围外的引用。');
+  for(const ref of report.migrationReferences) lines.push(`- 旧链接 ${text(ref.target)}：${text(ref.document)} 第 ${ref.line??'未知'} 行${ref.section?' · '+text(ref.section):''}`);
+  lines.push('',`- 新增：${report.addresses.added.map(text).join('、')||'无'}`,`- 删除：${report.addresses.removed.map(text).join('、')||'无'}`);
+  for(const [from,to]of Object.entries(report.addresses.redirects))lines.push(`- 迁移登记：${text(from)} → ${text(to)}`);
   lines.push('','### 版本与归档待确认','');
   for(const item of report.versionReview)lines.push(`- ${text(item.document)}（${item.change}）：${text(item.previousVersion??'未声明')} → ${text(item.candidateVersion??'未声明')}；确认是否升级及归档。`);
-  lines.push('','### 地址变更','',`- 新增：${report.addresses.added.map(text).join('、')||'无'}`,`- 删除：${report.addresses.removed.map(text).join('、')||'无'}`);
-  for(const [from,to]of Object.entries(report.addresses.redirects))lines.push(`- 迁移登记：${text(from)} → ${text(to)}`);
   return lines.join('\n')+'\n';
 }
 function migrationMarkdown(result,repository) {

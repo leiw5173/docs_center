@@ -307,20 +307,18 @@ async function backendPreview() {
     fs.mkdirSync(path.dirname(out),{recursive:true});fs.writeFileSync(out,Buffer.concat(chunks));
     const digest=sha(JSON.stringify(manifest)),siteUrl=response.headers.get('x-document-preview-url');
     if(!siteUrl)throw Error('Candidate artifact exists but test site was not deployed');
-    const logical=id=>{const parts=id.split('/');const scope=manifest.scopes.find(s=>s.repoId===parts[0]);if(!scope||parts[1]!==manifest.language)throw Error('Migration source is outside preview');return scope.prefix+'/'+parts.slice(2).join('/');};
-    const redirects=Object.entries(manifest.redirects||{}).filter(([from,to])=>!previews.directoryMetadata(from)&&!previews.directoryMetadata(to)).slice(0,4).map(([from,to])=>{const sourcePath=logical(from),targetPath=logical(to),url=new URL('/community/document/info',siteUrl);url.search=new URLSearchParams({preview:digest,lang:manifest.language,nodepath:sourcePath});return {from,to,sourcePath,targetPath,url:url.href};});
-    const pages=previews.changedPages(manifest,baseState(manifest.language),siteUrl);
+    const previous=baseState(manifest.language);
+    const reportDirectory=argument('--check-report');
+    const report=reportDirectory ? read(path.join(reportDirectory,...(onboarding?[manifest.language]:[]),'report.json')) : null;
+    if(report && (report.language!==manifest.language || !Array.isArray(report.migrationReferences))) throw Error('Invalid candidate migration report');
+    const redirects=previews.migrationPreviews(manifest,previous,siteUrl,report?.migrationReferences);
+    const pages=previews.changedPages(manifest,previous,siteUrl);
     const site={language:manifest.language,digest,url:siteUrl,pages,redirects};previews.previewSites([site]);
     const deployed=await fetch(siteUrl,{redirect:'error',signal:AbortSignal.timeout(30000)});
     if(!deployed.ok||!deployed.headers.get('content-type')?.includes('text/html')||!(await deployed.text()).includes('id="app"'))throw Error('Deployed preview is not the document center application');
     const contextUrl=new URL(`/document-previews/${digest}/api/document/preview-context`,siteUrl);
     const contextResponse=await fetch(contextUrl,{signal:AbortSignal.timeout(30000)}),context=contextResponse.ok?await contextResponse.json():null;
     if(context?.data?.digest!==digest||manifest.scopes.some(scope=>!context.data.scopes.some(s=>s.repoId===scope.repoId&&s.commit===scope.commit&&s.language===scope.language)))throw Error('Document center is not deployed with the reviewed source revisions');
-    for(const link of redirects) {
-      const resolve=new URL(`/document-previews/${digest}/api/document/resolve`,siteUrl);resolve.search=new URLSearchParams({language:manifest.language,sourcePath:link.sourcePath});
-      const probe=await fetch(resolve,{signal:AbortSignal.timeout(30000)}),resolved=probe.ok?await probe.json():null;
-      if(resolved?.data?.sourcePath!==link.targetPath)throw Error('Document center cannot resolve the old link to the reviewed target');
-    }
     sites.push(site);
   }
   if(process.env.GITHUB_OUTPUT)fs.appendFileSync(process.env.GITHUB_OUTPUT,`preview_sites=${JSON.stringify(sites)}\n`);

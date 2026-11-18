@@ -150,6 +150,7 @@ jobs:
       preview_sites: ${{ steps.staging.outputs.preview_sites }}
       review_status: ${{ steps.review.outputs.review_status }}
       review_summary: ${{ steps.review.outputs.review_summary }}
+      redirect_failures: ${{ steps.review.outputs.redirect_failures }}
     needs: preview
     if: always() && needs.preview.result == 'success' && github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
@@ -163,10 +164,15 @@ jobs:
         with:
           node-version: '22'
       - run: npm ci --ignore-scripts
+      - uses: actions/download-artifact@v4
+        if: startsWith(github.head_ref, 'document-release/') || startsWith(github.head_ref, 'document-registration/')
+        with:
+          name: document-preview-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/document-check-report
       - name: Request backend staging artifact
         id: staging
         if: startsWith(github.head_ref, 'document-release/') || startsWith(github.head_ref, 'document-registration/')
-        run: node scripts/document-governance/run.cjs backend-preview --output "$RUNNER_TEMP/backend-preview/preview.zip"
+        run: node scripts/document-governance/run.cjs backend-preview --output "$RUNNER_TEMP/backend-preview/preview.zip" --check-report "$RUNNER_TEMP/document-check-report"
         env:
           GH_TOKEN: ${{ github.token }}
           DOCUMENT_PREVIEW_URL: ${{ vars.DOCUMENT_PREVIEW_URL }}
