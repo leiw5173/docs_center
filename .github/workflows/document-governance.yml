@@ -152,7 +152,7 @@ jobs:
       review_summary: ${{ steps.review.outputs.review_summary }}
     needs: preview
     if: always() && needs.preview.result == 'success' && github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: document-preview
     steps:
       # Execute trusted default-branch code, never a PR's code with the preview secret.
