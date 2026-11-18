@@ -1,6 +1,6 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
-const {comparePublished, documents} = require('../../scripts/document-governance/audit.cjs');
+const {comparePublished, documents, storageUrl} = require('../../scripts/document-governance/audit.cjs');
 const {reconcile} = require('../../scripts/document-governance/audit-issues.cjs');
 
 test('published inventory spots removed addresses, dependent documents and version changes', () => {
@@ -42,4 +42,10 @@ test('repeat findings do not duplicate issues and changed findings update the ex
   assert.deepEqual(changes,['POST','PATCH']);
   assert(state[0].body.includes('第 11 行'));
   assert(state[0].body.includes('安装步骤为空'));
+});
+
+test('CDN paths encode literal plus signs without double-encoding existing escapes', () => {
+  const base = 'https://cdn-resource.spacemit.com/courses/';
+  assert.equal(storageUrl(base+'C++.md'),base+'C%2B%2B.md');
+  assert.equal(storageUrl(base+'C%2B%2B.md#section'),base+'C%2B%2B.md');
 });

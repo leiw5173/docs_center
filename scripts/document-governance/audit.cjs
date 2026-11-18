@@ -15,6 +15,8 @@ const categories = {
 function storageUrl(value) {
   const url = new URL(value);
   if (url.origin !== cdn || url.username || url.password) throw Error('正文地址不在配置的文档 CDN');
+  // The CDN treats literal plus signs in object paths as spaces.
+  url.pathname = url.pathname.replace(/\+/g, '%2B');
   url.hash = '';
   return url.href;
 }
@@ -173,7 +175,14 @@ async function audit(out, baseline, pinnedOut) {
 
     for (const link of data.links) {
       let target;
-      try { target = new URL(link.href,doc.url); }
+      try {
+        target = new URL(link.href,doc.url);
+        if (target.origin === cdn) {
+          const hash = target.hash;
+          target = new URL(storageUrl(target.href));
+          target.hash = hash;
+        }
+      }
       catch { add('links',doc,'invalid-url','链接格式无法解析。'); continue; }
       const hash = target.hash;
       target.hash = '';
@@ -274,4 +283,4 @@ function auditPinned(out) {
   }
 }
 
-module.exports = {audit, categories, comparePublished, documents, identity, sha};
+module.exports = {audit, categories, comparePublished, documents, identity, sha, storageUrl};
