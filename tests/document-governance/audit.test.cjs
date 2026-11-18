@@ -159,3 +159,23 @@ test('missing image issue identifies its alt text and filename and explains that
   assert(!issue.body.includes('撤下失效入口'));
   assert.match(resourceFinding({image:false},target,404).message,/链接目标/);
 });
+
+test('missing image reports quote the preceding sentence and never borrow text across headings', async () => {
+  const {analyze} = require('../../scripts/document-governance/core.cjs');
+  const {resourceFinding} = require('../../scripts/document-governance/audit.cjs');
+  const markdown = '## Launch the Service\n\n```bash\nros2 launch example\n```\n\nWait for the node. The terminal prints:\n\n![](ocr3.png)\n\n## Client Code\n\n![](other.png)';
+  const [image, other] = analyze(markdown).links;
+  assert.equal(image.precedingText,'The terminal prints:');
+  assert.equal(other.precedingText,'');
+  const consecutive = analyze('Result:\n\n![First alt](a.png)\n\n![](b.png)').links;
+  assert.equal(consecutive[1].precedingText,'Result:');
+  assert.equal(analyze('See the screenshot: ![](demo.png)').links[0].precedingText,'See the screenshot:');
+
+  let issue;
+  const api = async (_path,method,body) => { if (!method) return []; issue = body; return {}; };
+  await reconcile(api,'sample/docs','https://github.com/sample/docs/actions/runs/1',[
+    {category:'links',code:'missing-resource',language:'en',path:'ocr.md',line:image.line,
+      ...resourceFinding(image,'https://cdn-resource.spacemit.com/ocr3.png',404)}
+  ]);
+  assert(issue.body.includes('图片前的原文：「The terminal prints:」'));
+});

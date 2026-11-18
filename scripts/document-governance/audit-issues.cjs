@@ -71,6 +71,7 @@ function line(finding) {
   const evidence = finding.evidence;
   if (!evidence && finding.category !== 'coverage') return '- ' + result;
   const fields = ['- '+result];
+  if (evidence?.precedingText) fields.push('  - 图片前的原文：「'+plain(evidence.precedingText)+'」');
   if (evidence?.stage) fields.push('  - 失败环节：'+plain(evidence.stage));
   if (evidence?.checkedUrl) fields.push('  - 实际请求：[查看目标地址]('+link(evidence.checkedUrl)+')');
   if (evidence?.status && !finding.message.includes('HTTP '+evidence.status)) fields.push('  - 响应：HTTP '+evidence.status);

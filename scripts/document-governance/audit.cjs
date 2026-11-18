@@ -160,7 +160,8 @@ function resourceFinding(link, url, status) {
     evidence: {
       stage: link.image ? '读取正文引用的图片' : '访问正文引用的链接目标',
       kind: link.image ? 'image-not-found' : 'link-target-not-found',
-      status, checkedUrl:url
+      status, checkedUrl:url,
+      ...(link.image && link.precedingText ? {precedingText:link.precedingText} : {})
     }
   };
 }

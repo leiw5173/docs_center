@@ -63,17 +63,33 @@ function metadata(text) {
   return {data,body:normalized.slice(bodyStart),firstLine:normalized.slice(0,bodyStart).split('\n').length};
 }
 function tokensOf(tokens) { return tokens.flatMap(t=>[t,...tokensOf(t.children||[])]); }
+const sentenceBoundary = new Intl.Segmenter(undefined,{granularity:'sentence'});
+
 function analyze(text) {
   const {data,body,firstLine} = metadata(text), tokens = md.parse(body,{}), links=[];
-  for (const token of tokens) for (const t of tokensOf([token])) {
-    if (t.type==='link_open' || t.type==='image') {
+  const lastSentence = text => {
+    const visible = text.replace(/\s+/g,' ').trim();
+    if (!/[\p{L}\p{N}]/u.test(visible)) return '';
+    const sentence = Array.from(sentenceBoundary.segment(visible)).at(-1).segment.trim();
+    return sentence.length > 160 ? '…' + sentence.slice(-159).trimStart() : sentence;
+  };
+  let previousProse = '';
+  for (const [index,token] of tokens.entries()) {
+    if (['heading_open','fence','code_block','hr','table_open'].includes(token.type)) previousProse = '';
+    const prose = token.type === 'inline' && !['heading_open','th_open','td_open'].includes(tokens[index-1]?.type);
+    let textBefore = '';
+    for (const t of token.children || [token]) {
+      if (prose && (t.type === 'text' || t.type === 'code_inline')) textBefore += t.content;
+      if (prose && (t.type === 'softbreak' || t.type === 'hardbreak')) textBefore += ' ';
+      if (t.type !== 'link_open' && t.type !== 'image') continue;
       const image = t.type === 'image';
       links.push({
         href: t.attrGet(image ? 'src' : 'href'), image,
-        ...(image ? {alt: t.content.trim()} : {}),
+        ...(image ? {alt:t.content.trim(), precedingText:prose ? lastSentence(textBefore) || previousProse : ''} : {}),
         line: token.map ? firstLine + token.map[0] : undefined
       });
     }
+    if (prose) previousProse = lastSentence(textBefore) || previousProse;
   }
   const anchors = new Set(), counts = new Map(), headings=[];
   for(let i=0;i<tokens.length;i++) if(tokens[i].type==='heading_open') {
