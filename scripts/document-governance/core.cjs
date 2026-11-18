@@ -1,3 +1,4 @@
+const {completeness} = require('./completeness.cjs');
 // No network or production writes: read immutable Git blobs, check, and build previews.
 const {execFileSync} = require('node:child_process');
 const fs = require('node:fs');
@@ -50,7 +51,7 @@ function snapshot(root, revision) {
 }
 function metadata(text) {
   const normalized = text.replace(/\r\n/g,'\n');
-  if (!normalized.startsWith('---\n')) return {data:{}, body:normalized};
+  if (!normalized.startsWith('---\n')) return {data:{}, body:normalized, firstLine:1};
   const end = normalized.indexOf('\n---\n',4);
   if (end < 0) throw Error('Unclosed front matter');
   const data = yaml.load(normalized.slice(4,end),{schema:yaml.JSON_SCHEMA}) || {};
@@ -58,11 +59,12 @@ function metadata(text) {
   if(data.title!==undefined && typeof data.title!=='string')throw Error('title must be text');
   if (data.sidebar_position !== undefined && (!Number.isSafeInteger(data.sidebar_position) || data.sidebar_position<0)) throw Error('sidebar_position must be a nonnegative integer');
   if (data.software_version !== undefined && typeof data.software_version !== 'string') throw Error('software_version must be quoted text');
-  return {data,body:normalized.slice(end+5)};
+  const bodyStart = end + 5;
+  return {data,body:normalized.slice(bodyStart),firstLine:normalized.slice(0,bodyStart).split('\n').length};
 }
 function tokensOf(tokens) { return tokens.flatMap(t=>[t,...tokensOf(t.children||[])]); }
 function analyze(text) {
-  const {data,body} = metadata(text), tokens = md.parse(body,{}), links=[];
+  const {data,body,firstLine} = metadata(text), tokens = md.parse(body,{}), links=[];
   for (const t of tokensOf(tokens)) if (t.type==='link_open' || t.type==='image') links.push({href:t.attrGet(t.type==='image'?'src':'href'),image:t.type==='image'});
   const anchors = new Set(), counts = new Map(), headings=[];
   for(let i=0;i<tokens.length;i++) if(tokens[i].type==='heading_open') {
@@ -70,7 +72,7 @@ function analyze(text) {
     const n=counts.get(base)||0;counts.set(base,n+1);anchors.add(base+(n?`-${n}`:''));headings.push({title,level:tokens[i].tag});
     tokens[i].attrSet('id',base+(n?`-${n}`:''));
   }
-  return {data,body,tokens,links,anchors,headings,html:md.renderer.render(tokens,md.options,{})};
+  return {data,body,firstLine,tokens,links,anchors,headings,html:md.renderer.render(tokens,md.options,{})};
 }
 function localTarget(file, href) {
   if (!href || /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(href)) return null;
@@ -85,6 +87,7 @@ function localTarget(file, href) {
 function build({registry,roots,revisions,language,previous=null,overrides={}}) {
   validateRegistry(registry); if(!['zh','en'].includes(language))throw Error('Invalid language');
   const errors=[], warnings=[], scopes=[], pages=new Map();
+  const oldDocs=new Map((previous?.scopes||[]).flatMap(s=>s.documents.map(d=>[`${s.repoId}/${d.path}`,d])));
   const issue=(list,repo,file,code,message)=>list.push({repo,file,code,message});
   for(const r of registry.repositories.filter(r=>r.languages.includes(language))) {
     const revision=revisions[r.id], source=snapshot(roots[r.id],revision), parsed=new Map();
@@ -96,8 +99,18 @@ function build({registry,roots,revisions,language,previous=null,overrides={}}) {
       const h1=a.headings.filter(h=>h.level==='h1');
       if(!h1.length||!a.body.trim())issue(errors,r.id,file,'incomplete','Missing H1 or empty body');
       const visibleText=tokensOf(a.tokens).filter(t=>t.type==='text').map(t=>t.content).join('\n');
-      const emptySection=a.tokens.some((t,i)=>t.type==='heading_close'&&(!a.tokens[i+1]||(a.tokens[i+1].type==='heading_open'&&Number(a.tokens[i+1].tag.slice(1))<=Number(t.tag.slice(1)))));
-      if(emptySection||/\b(?:TODO|TBD)\b|待补充|待完善/.test(visibleText))issue(warnings,r.id,file,'content-review','Content appears unfinished (empty section or placeholder); document team must review completeness');
+      const fileHash = sha(source.get(file).read());
+      const changed = oldDocs.get(`${r.id}/${file}`)?.sha256 !== fileHash;
+      for (const finding of completeness(a.body, a.firstLine, file)) {
+        const blocking = finding.blocking && changed;
+        (blocking ? errors : warnings).push({
+          repo:r.id, file, line:finding.line, code:blocking?'content-incomplete':'content-review',
+          message:finding.message
+        });
+      }
+      if (/\b(?:TODO|TBD)\b|待补充|待完善/.test(visibleText)) {
+        issue(warnings,r.id,file,'content-review','Content contains a placeholder; document team must review completeness');
+      }
       if([...a.headings.map(h=>h.title),a.data.title||''].some(title=>/^\d+(?:\.\d+)*(?:[.、\s]|$)/.test(title)))issue(warnings,r.id,file,'numbered-title','Review numeric chapter prefix');
       for(const t of a.tokens)if(t.type==='ordered_list_open' && t.attrGet('start') && t.attrGet('start')!=='1')issue(warnings,r.id,file,'list-start','Ordered list does not start at 1');
       if(!source.has(file.replace(new RegExp(`^${language}/`),language==='zh'?'en/':'zh/')))issue(warnings,r.id,file,'translation','Other language counterpart is missing; release remains independent');
@@ -115,13 +128,12 @@ function build({registry,roots,revisions,language,previous=null,overrides={}}) {
           if(target.anchor && !parsed.get(target.path)?.anchors.has(target.anchor))issue(errors,r.id,file,'anchor',`Missing anchor ${target.path}#${target.anchor}`);
         } else {const bytes=source.get(target.path).read();assets.set(target.path,{path:target.path,sha256:sha(bytes)});}
       }catch(e){issue(errors,r.id,file,'link',e.message);}
-      const doc={path:file,sha256:sha(source.get(file).read()),title:a.data.title||h1[0]?.title||path.posix.basename(file),sidebarPosition:a.data.sidebar_position??null,softwareVersion:a.data.software_version??null,references:[...new Set(references)].sort()};
+      const doc={path:file,sha256:fileHash,title:a.data.title||h1[0]?.title||path.posix.basename(file),sidebarPosition:a.data.sidebar_position??null,softwareVersion:a.data.software_version??null,references:[...new Set(references)].sort()};
       docs.push(doc);pages.set(`${r.id}/${file}`,{...a,source,repo:r,revision,file});
     }
     scopes.push({repoId:r.id,repository:r.repository,prefix:r.prefix,rootDep:r.rootDep,column:r.column,...(r.parentNavigationId?{parentNavigationId:r.parentNavigationId}:{}),...(r.navigationPath?{navigationPath:r.navigationPath}:{}),language,commit:revision,documents:docs,assets:[...assets.values()].sort((a,b)=>a.path.localeCompare(b.path))});
   }
   if(!scopes.length)throw Error('No repositories registered for selected language');
-  const oldDocs=new Map((previous?.scopes||[]).flatMap(s=>s.documents.map(d=>[`${s.repoId}/${d.path}`,d])));
   const newDocs=new Map(scopes.flatMap(s=>s.documents.map(d=>[`${s.repoId}/${d.path}`,d])));
   for(const scope of scopes)for(const doc of scope.documents)for(const target of doc.references)if(!newDocs.has(target))issue(errors,scope.repoId,doc.path,'reference-group',`Reference outside complete release group: ${target}`);
   for(const [id,old]of oldDocs)if(!newDocs.has(id))issue(warnings,id.split('/')[0],id,'address-change','Removed document: review redirects, references and archive');else if(old.softwareVersion!==newDocs.get(id).softwareVersion)issue(warnings,id.split('/')[0],id,'version','Version changed: review old version archive');
