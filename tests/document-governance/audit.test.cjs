@@ -49,3 +49,52 @@ test('CDN paths encode literal plus signs without double-encoding existing escap
   assert.equal(storageUrl(base+'C++.md'),base+'C%2B%2B.md');
   assert.equal(storageUrl(base+'C%2B%2B.md#section'),base+'C%2B%2B.md');
 });
+
+test('read failures preserve diagnosis and strip CDN credentials from evidence', async () => {
+  const {readText, failureDetails} = require('../../scripts/document-governance/audit.cjs');
+  const url = 'https://cdn-resource.spacemit.com/C%2B%2B.md?signature=secret';
+  await assert.rejects(readText(new Response('missing',{status:404}),1024), error => {
+    assert.deepEqual(failureDetails(error,'读取 CDN 正文',url),{
+      kind:'not-found',stage:'读取 CDN 正文',message:'服务器返回 HTTP 404。',status:404,
+      checkedUrl:'https://cdn-resource.spacemit.com/C%2B%2B.md'
+    });
+    return true;
+  });
+  await assert.rejects(readText(new Response('page',{headers:{'content-type':'text/html'}}),1024),
+    error => error.kind === 'unexpected-html');
+  assert.equal(failureDetails(new DOMException('timed out','TimeoutError'),'读取官网目录',url).kind,'timeout');
+});
+
+test('CDN HEAD failures only become missing resource findings after GET confirms them', async () => {
+  const {missingResource} = require('../../scripts/document-governance/audit.cjs');
+  const url = 'https://cdn-resource.spacemit.com/C%2B%2B.png';
+  for (const status of [206,403,404,410]) {
+    const calls = [];
+    const check = async (receivedUrl,method,headers) => {
+      assert.equal(receivedUrl,url);
+      calls.push(method);
+      if (method === 'GET') assert.equal(headers.Range,'bytes=0-0');
+      return new Response(null,{status:method === 'HEAD' ? 404 : status});
+    };
+    assert.equal(await missingResource(url,check),[404,410].includes(status) ? status : null);
+    assert.deepEqual(calls,['HEAD','GET']);
+  }
+});
+
+test('coverage issue names the failed stage and endpoint, then records recovery in the existing issue', async () => {
+  const state = [], changes = [];
+  const api = async (_path,method,body) => {
+    if (!method) return state;
+    changes.push(method);
+    if (!state.length) state.push({number:15,user:{login:'github-actions[bot]'}});
+    return Object.assign(state[0],body);
+  };
+  const url = 'https://cdn-resource.spacemit.com/C%2B%2B.md';
+  const findings = [{category:'coverage',language:'zh',path:'courses/C++.md',message:'服务器返回 HTTP 404。',
+    evidence:{stage:'读取 CDN 正文',status:404,kind:'not-found',checkedUrl:url}}];
+  await reconcile(api,'sample/docs','https://github.com/sample/docs/actions/runs/1',findings);
+  for (const expected of ['读取 CDN 正文','HTTP 404',url,'URL 编码','检查未执行完']) assert(state[0].body.includes(expected));
+  await reconcile(api,'sample/docs','https://github.com/sample/docs/actions/runs/2',[]);
+  assert.deepEqual(changes,['POST','PATCH']);
+  assert(state[0].body.includes('本次重查未发现'));
+});

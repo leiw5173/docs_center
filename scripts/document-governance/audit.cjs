@@ -9,7 +9,7 @@ const cdn = 'https://cdn-resource.spacemit.com';
 const categories = {
   links: '页内链接与资源', content: '内容完整性与序号', titles: '标题编号',
   references: '引用影响', versions: '版本与归档', translations: '中英文缺失',
-  directories: '目录介绍', addresses: '地址变更', coverage: '巡检覆盖异常'
+  directories: '目录介绍', addresses: '地址变更', coverage: '目录或正文读取失败'
 };
 
 function storageUrl(value) {
@@ -21,10 +21,27 @@ function storageUrl(value) {
   return url.href;
 }
 
-async function request(url, method = 'GET') {
+class ReadFailure extends Error {
+  constructor(kind, message, status) {
+    super(message);
+    this.kind = kind;
+    this.status = status;
+  }
+}
+
+function failureDetails(error, stage, url) {
+  const kind = error.kind || (error.name === 'TimeoutError' ? 'timeout' : 'network');
+  const message = error.kind ? error.message : kind === 'timeout' ? '请求或读取正文超时。' : '网络请求未取得有效响应。';
+  const endpoint = url ? new URL(url) : null;
+  if (endpoint?.origin === cdn) endpoint.search = ''; // Do not report signed storage query strings.
+  return {kind, stage, message, ...(error.status ? {status:error.status} : {}),
+    ...(endpoint ? {checkedUrl:endpoint.href} : {})};
+}
+
+async function request(url, method = 'GET', headers) {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const response = await fetch(url, {method, redirect:'error', signal:AbortSignal.timeout(12000)});
+      const response = await fetch(url, {method, headers, redirect:'error', signal:AbortSignal.timeout(12000)});
       if (attempt === 0 && (response.status >= 500 || response.status === 429)) {
         await response.body?.cancel();
         continue;
@@ -96,48 +113,92 @@ function comparePublished(previous, current, add) {
 }
 
 async function readText(response, limit) {
-  if (!response.ok) throw Error('HTTP ' + response.status);
-  if (response.headers.get('content-type')?.includes('text/html')) throw Error('返回 HTML，预期为正文或目录数据');
+  if (!response.ok) {
+    await response.body?.cancel();
+    const status = response.status;
+    const kind = [404,410].includes(status) ? 'not-found'
+      : [401,403].includes(status) ? 'access-denied'
+      : status === 429 || status >= 500 ? 'service-error' : 'http-error';
+    throw new ReadFailure(kind, '服务器返回 HTTP ' + status + '。', status);
+  }
+  if (response.headers.get('content-type')?.includes('text/html')) {
+    await response.body?.cancel();
+    throw new ReadFailure('unexpected-html','服务器返回 HTML，预期为 Markdown 正文或目录数据。');
+  }
   const chunks = [];
   let bytes = 0;
   for await (const chunk of response.body) {
     bytes += chunk.length;
-    if (bytes > limit) throw Error('响应超过容量上限');
+    if (bytes > limit) throw new ReadFailure('size-limit','响应超过本次巡检的读取容量上限。');
     chunks.push(chunk);
   }
   return Buffer.concat(chunks).toString('utf8');
 }
 
+async function missingResource(url, fetcher = request) {
+  const head = await fetcher(url,'HEAD');
+  if (![404,410,405,501].includes(head.status)) return null;
+  // Confirm via GET. Some storage origins reject HEAD for a readable object.
+  const probe = await fetcher(url,'GET',{Range:'bytes=0-0'});
+  await probe.body?.cancel();
+  return [404,410].includes(probe.status) ? probe.status : null;
+}
+
 async function audit(out, baseline, pinnedOut) {
   const findings = [], inventory = [], catalog = [], parsed = new Map();
-  const add = (category, doc, code, message, line) => findings.push({
-    category, language:doc.language, path:doc.path, url:location(doc), code, message, ...(line ? {line} : {})
+  const add = (category, doc, code, message, line, evidence) => findings.push({
+    category, language:doc.language, path:doc.path, url:category === 'coverage' && !doc.url ? '' : location(doc),
+    code, message, ...(line ? {line} : {}), ...(evidence ? {evidence} : {})
   });
+  const unread = (doc, code, error, stage, url) => {
+    const details = failureDetails(error, stage, url);
+    add('coverage',doc,code,details.message,null,details);
+  };
   for (const language of ['zh','en']) {
+    const url = site + '/api-server/document/get-doc-tree?language=' + language;
     try {
-      const response = await request(site + '/api-server/document/get-doc-tree?language=' + language);
-      const data = JSON.parse(await readText(response, 12 * 1024 * 1024));
-      if (![200,20000].includes(data.code) || !Array.isArray(data.data)) throw Error('目录响应格式异常');
+      const response = await request(url);
+      let data;
+      const text = await readText(response, 12 * 1024 * 1024);
+      try { data = JSON.parse(text); }
+      catch { throw new ReadFailure('invalid-catalog','响应不是有效的目录 JSON。'); }
+      if (![200,20000].includes(data.code) || !Array.isArray(data.data)) {
+        throw new ReadFailure('invalid-catalog','接口未返回成功状态或有效的目录数据。');
+      }
       const entries = documents(data.data, language);
-      if (!entries.length) throw Error('没有读取到已发布 Markdown');
+      if (!entries.length) throw new ReadFailure('empty-catalog','目录中没有返回任何已发布 Markdown。');
       catalog.push(...entries);
     } catch (error) {
-      add('coverage',{language,path:'已发布目录'},'catalog-unavailable',error.message);
+      unread({language,path:'已发布目录'},'catalog-unavailable',error,'读取官网目录',url);
     }
   }
   const catalogComplete = !findings.length;
   console.log('Published catalog lists ' + catalog.length + ' Markdown pages');
   const byUrl = new Map(), byPath = new Set(catalog.map(identity));
   for (const doc of catalog) {
-    try {doc.url = storageUrl(doc.url); byUrl.set(doc.url,doc);}
-    catch (error) {add('coverage', doc, 'unsupported-source', error.message);}
-  }
-  await pool([...byUrl.values()], async doc => {
     try {
-      const response = await request(doc.url);
+      doc.url = storageUrl(doc.url);
+      const entries = byUrl.get(doc.url) || [];
+      entries.push(doc);
+      byUrl.set(doc.url,entries);
+    }
+    catch {
+      unread(doc,'unsupported-source',new ReadFailure('unsupported-source','目录未提供有效的文档 CDN 地址。'),
+        '解析目录记录的正文地址');
+    }
+  }
+  await pool([...byUrl], async ([url, entries]) => {
+    try {
+      const response = await request(url);
       const content = await readText(response, 4 * 1024 * 1024);
-      parsed.set(doc.url, {doc, data:analyze(content)});
-    } catch (error) {add('coverage', doc, 'body-unavailable', error.message);}
+      let data;
+      try { data = analyze(content); }
+      catch { throw new ReadFailure('invalid-markdown','正文已下载，但 Markdown 文档元数据无法解析。'); }
+      for (const doc of entries) parsed.set(identity(doc), {doc, data});
+    } catch (error) {
+      const stage = error.kind === 'invalid-markdown' ? '解析正文元数据' : '读取 CDN 正文';
+      for (const doc of entries) unread(doc,'body-unavailable',error,stage,url);
+    }
   });
 
   console.log('Read ' + parsed.size + ' Markdown bodies');
@@ -202,12 +263,12 @@ async function audit(out, baseline, pinnedOut) {
         continue;
       }
       if (target.origin !== cdn || target.username || target.password) continue;
-      const known = byUrl.get(target.href);
+      const known = byUrl.get(target.href)?.[0];
       if (known) {
         references.add(identity(known));
-        if (!hash || !parsed.has(target.href)) continue;
+        if (!hash || !parsed.has(identity(known))) continue;
         try {
-          if (!parsed.get(target.href).data.anchors.has(decodeURIComponent(hash.slice(1)))) {
+          if (!parsed.get(identity(known)).data.anchors.has(decodeURIComponent(hash.slice(1)))) {
             add('links',doc,'missing-anchor','目标章节不存在：' + known.path + hash);
           }
         } catch {add('links',doc,'invalid-anchor','链接锚点编码无效。');}
@@ -222,9 +283,10 @@ async function audit(out, baseline, pinnedOut) {
   console.log('Found ' + resources.size + ' CDN link targets to verify');
   await pool([...resources], async ([url, owners]) => {
     try {
-      const response = await request(url,'HEAD');
-      if ([404,410].includes(response.status)) {
-        for (const doc of owners) add('links',doc,'missing-resource','链接目标不存在：' + new URL(url).pathname);
+      const status = await missingResource(url);
+      if (status) {
+        for (const doc of owners) add('links',doc,'missing-resource','正文引用的资源无法找到。',null,
+          {stage:'核验正文内资源',kind:'not-found',status,checkedUrl:url});
       }
     } catch {
       // Transient failures and HEAD denials do not establish a broken link.
@@ -283,4 +345,4 @@ function auditPinned(out) {
   }
 }
 
-module.exports = {audit, categories, comparePublished, documents, identity, sha, storageUrl};
+module.exports = {audit, categories, comparePublished, documents, identity, sha, storageUrl, readText, failureDetails, missingResource};
