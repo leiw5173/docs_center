@@ -43,3 +43,23 @@ test('local notifications give the host browser address instead of the runner ne
   assert(message.paragraphs.flat().some(item=>item.href==='http://127.0.0.1:18098/community/document/info?lang=zh'));
   assert(!JSON.stringify(message).includes('document-review-preview-gateway'));
 });
+
+test('bilingual preview notifications group pages and migrations under each language',()=>{
+  const site=(language,title)=>({
+    language,url:`https://preview.example/${language}`,
+    pages:[{title,path:`${language}/long/path/steps.md`,url:`https://preview.example/${language}/steps`}],
+    redirects:[{sourcePath:'maintenance-test/guide/steps.md',targetPath:'maintenance-test/maintenance-guide/steps.md',
+      url:`https://preview.example/${language}/old`,targetUrl:`https://preview.example/${language}/steps`,
+      references:[{direct:false,title:'引用文档',url:`https://preview.example/${language}/reference`}]}]
+  });
+  const message=previewMessage({...options,sites:[site('en','Steps'),site('zh','维护步骤')],
+    review:{pageCount:2,redirectCount:2,findings:[],redirectFailures:[]}});
+  const lines=message.paragraphs.map(line=>line.map(item=>item.text).join(''));
+  assert.deepEqual(lines.filter(line=>line.startsWith('【')),['【浏览器复检】','【中文预览】 打开测试网','【英文预览】 打开测试网']);
+  assert(lines.includes('• 维护步骤'));
+  assert(lines.includes('• guide/steps.md → maintenance-guide/steps.md'));
+  assert(!lines.some(line=>line.includes('maintenance-test/')));
+  for(const lang of ['zh','en']) {
+    assert(message.paragraphs.flat().some(item=>item.href===`https://preview.example/${lang}/reference`));
+  }
+});

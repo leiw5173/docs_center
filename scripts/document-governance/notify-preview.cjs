@@ -5,6 +5,7 @@ const {previewSites,localPreviewMode,localPreviewOrigin,localBrowserOrigin} = re
 
 const text = value => ({tag:'text',text:String(value)});
 const link = (label, href) => ({tag:'a',text:label,href});
+const shortPath = value => value.split('/').slice(-2).join('/');
 
 function previewMessage({repository, number, revision, runId, deployment, reviewOutcome, sites, review, local=false}) {
   if(!/^[\w-]+\/[\w.-]+$/.test(repository)||!Number.isSafeInteger(number)||
@@ -16,29 +17,34 @@ function previewMessage({repository, number, revision, runId, deployment, review
     [link(`候选 PR #${number}`, `${github}/pull/${number}`),text(' · '),link('CI 记录', `${github}/actions/runs/${runId}`)],
     [text(`候选修订 ${revision.slice(0,12)}`)]
   ];
+  const section = (...heading) => paragraphs.push([text('\u00a0')],heading);
   if(local) paragraphs.push([text('本地预览链接仅可在运行测试服务的电脑打开。')]);
   if(review) {
     const failures = review.findings.filter(item=>item.severity==='error').length;
-    paragraphs.push([text(`浏览器复检 · ${review.pageCount} 个页面，${review.redirectCount} 条旧链接，阻断 ${failures} 项，提醒 ${review.findings.length-failures} 项。`)]);
+    section(text('【浏览器复检】'));
+    paragraphs.push([text(`页面 ${review.pageCount} · 旧链接 ${review.redirectCount} · 阻断 ${failures} · 提醒 ${review.findings.length-failures}`)]);
   }
-  for(const site of sites) {
-    paragraphs.push([link(site.language==='zh'?'中文测试网':'英文测试网',site.url)]);
-    for(const page of site.pages) paragraphs.push([link(`${page.title} · ${page.path}`,page.url)]);
+  for(const site of [...sites].sort((a,b)=>b.language.localeCompare(a.language))) {
+    section(text(site.language==='zh'?'【中文预览】 ':'【英文预览】 '),link('打开测试网',site.url));
+    if(site.pages.length) paragraphs.push([text(`变更页面（${site.pages.length}）`)]);
+    for(const page of site.pages) paragraphs.push([text('• '),link(page.title || shortPath(page.path),page.url)]);
+    if(site.redirects.length) paragraphs.push([text(`旧链接跳转（${site.redirects.length}）`)]);
     for(const migration of site.redirects) {
-      paragraphs.push([link(`旧地址 ${migration.sourcePath}`,migration.url),text(' → '),link(`预期新地址 ${migration.targetPath}`,migration.targetUrl)]);
+      paragraphs.push([text('• '),link(shortPath(migration.sourcePath),migration.url),text(' → '),link(shortPath(migration.targetPath),migration.targetUrl)]);
       for(const failure of review?.redirectFailures||[]) {
         if(failure.language!==site.language||failure.sourcePath!==migration.sourcePath) continue;
-        paragraphs.push([text(`跳转失败 · ${failure.reason}`)]);
-        for(const visited of failure.path) paragraphs.push([text('实际经过 '+visited)]);
+        paragraphs.push([text(`　跳转失败 · ${failure.reason}`)]);
+        for(const visited of failure.path) paragraphs.push([text('　实际经过 '+visited)]);
       }
       for(const ref of migration.references) {
         const title = [ref.direct?'直接引用':'间接引用',ref.title,ref.section,ref.line?`第 ${ref.line} 行`:null].filter(Boolean).join(' · ');
-        paragraphs.push([ref.url?link(title,ref.url):text(title)]);
+        paragraphs.push([text('　'),ref.url?link(title,ref.url):text(title)]);
       }
     }
   }
+  if(review?.findings.length) section(text('【复检发现】'));
   for(const finding of review?.findings||[]) {
-    paragraphs.push([text((finding.severity==='error'?'阻断':'提醒')+' · '),
+    paragraphs.push([text('• '+(finding.severity==='error'?'阻断':'提醒')+' · '),
       link(finding.title,finding.url),text(' · '+finding.message)]);
   }
   if(local) {
