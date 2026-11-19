@@ -61,6 +61,14 @@ async function reportStage(api,{repository,event,needs,runId}) {
     });
     links='\n\n### 文档中心测试网预览\n\n'+previewSections.join('\n\n');
   }
+  const translation=JSON.parse((event.action==='closed' ? needs.publish : needs.preview)?.outputs?.translation_review||'null');
+  if(translation?.count) {
+    links+='\n\n### 双语差异复核\n\n';
+    if(translation.issue) links+=`${translation.count} 处单语变更的差异已记录在 [Issue #${translation.issue}](https://github.com/${repository}/issues/${translation.issue})。`;
+    else if(translation.url?.startsWith(`https://github.com/${repository}/issues/new?`)) {
+      links+=`${translation.count} 处单语变更需要核对另一语言。请查看 CI 摘要里的文档清单。同步修改后重新生成候选，或由文档团队[开 Issue 记录接受的差异](${translation.url})并重跑检查。`;
+    }
+  }
   const body=`${marker}\n### 文档维护状态：${result.status}\n\n${result.message}${links}\n\n候选修订：\`${pr.head.sha}\`\n\n[查看此次检查和执行记录](https://github.com/${repository}/actions/runs/${runId})`;
   const commentsFound=[];
   for(let page=1;page<=20;page++) {
