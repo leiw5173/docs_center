@@ -85,6 +85,9 @@ function migrationPreviews(manifest,previous,siteUrl,evidence=[]) {
     return {from,to,sourcePath:sourcePrefix,targetPath,url:pageUrl(sourcePrefix),targetUrl:pageUrl(targetPath),references,anchors:[...anchors]};
   });
 }
+const localPreviewOrigin = 'http://document-review-preview-gateway';
+const localBrowserOrigin = 'http://127.0.0.1:18098';
+const localPreviewMode = () => process.env.DOCUMENT_PREVIEW_MODE === 'local';
 function previewSites(value) {
   const sites=typeof value==='string'?JSON.parse(value):value;
   if(!Array.isArray(sites)||!sites.length||sites.length>2)throw Error('Deployed preview links are required');
@@ -92,7 +95,9 @@ function previewSites(value) {
   for(const site of sites) {
     if(!['zh','en'].includes(site.language)||languages.has(site.language)||!/^[a-f0-9]{64}$/.test(site.digest))throw Error('Invalid deployed preview identity');languages.add(site.language);
     const url=new URL(site.url);
-    if(url.protocol!=='https:'||url.username||url.password||url.hash||url.pathname!=='/community/document'||url.searchParams.get('preview')!==site.digest||url.searchParams.get('lang')!==site.language)throw Error('Invalid deployed document center URL');
+    const validOrigin = localPreviewMode()
+      ? [localPreviewOrigin,localBrowserOrigin].includes(url.origin) : url.protocol==='https:';
+    if(!validOrigin||url.username||url.password||url.hash||url.pathname!=='/community/document'||url.searchParams.get('preview')!==site.digest||url.searchParams.get('lang')!==site.language)throw Error('Invalid deployed document center URL');
     if(!Array.isArray(site.pages))throw Error('Changed page previews are required');
     const paths=new Set();
     for(const page of site.pages) {
@@ -118,4 +123,4 @@ function previewSites(value) {
   }
   return sites;
 }
-module.exports={previewSites,changedPages,directoryMetadata,migrationPreviews,declaredDocuments};
+module.exports={previewSites,changedPages,directoryMetadata,migrationPreviews,declaredDocuments,localPreviewMode,localPreviewOrigin,localBrowserOrigin};
