@@ -14,7 +14,7 @@
         "教学与实践"
       ],
       "language": "en",
-      "commit": "c84ac7f436a7744d6518c98dd276fcf75db56af9",
+      "commit": "2eaa63ce1482fc4e013287278af619032a857e4c",
       "documents": [
         {
           "path": "en/index.md",
@@ -28,7 +28,7 @@
         },
         {
           "path": "en/maintenance-guide/index.md",
-          "sha256": "7ca39e40b04959757fe073f9c5b1e797ff12b02b2a4e1be19a19cbfd802ddb8d",
+          "sha256": "8cc89b961fce499991b1a22dec7eb245a9c5274e7d979e127c4d8737c31ff707",
           "title": "Test guide",
           "sidebarPosition": 1,
           "softwareVersion": null,
