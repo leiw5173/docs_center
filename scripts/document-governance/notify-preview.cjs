@@ -54,9 +54,11 @@ function previewMessage({repository, number, revision, runId, deployment, review
     paragraphs.push([text(`• ${[language(site),page?.title].filter(Boolean).join(' · ')}`)]);
     paragraphs.push([text('　变更前路径 · '),reviewLink(move.sourcePath,reviewUrl,move.url)]);
     paragraphs.push([text('　变更后路径 · '),reviewLink(move.targetPath,reviewUrl,move.targetUrl)]);
-    for(const ref of move.references) {
+    const affected = move.references.filter(ref=>ref.id!==move.from && ref.id!==move.to);
+    if(!affected.length) paragraphs.push([text('　受影响的其他页面 · 无')]);
+    for(const ref of affected) {
       const location = [ref.title,ref.section,ref.line?`第 ${ref.line} 行`:null].filter(Boolean).join(' · ');
-      paragraphs.push([text(`　受影响的${ref.direct?'直接引用':'间接引用'} · `),reviewLink(location,reviewUrl,ref.url)]);
+      paragraphs.push([text('　受影响的其他页面 · '),reviewLink(location,reviewUrl,ref.url)]);
     }
   }
   if(review?.findings.length) section(text('【复检发现】'));

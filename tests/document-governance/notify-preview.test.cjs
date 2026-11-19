@@ -51,9 +51,13 @@ test('bilingual preview notifications deep-link each review target within the sa
     language,reviewUrl,url:`https://preview.example/${language}`,
     pages:[{title,change:'moved',sourcePath:'maintenance-test/maintenance-guide/steps.md',
       path:`${language}/long/path/steps.md`,url:`https://preview.example/${language}/steps`}],
-    redirects:[{sourcePath:'maintenance-test/guide/steps.md',targetPath:'maintenance-test/maintenance-guide/steps.md',
+    redirects:[{from:`test/${language}/guide/steps.md`,to:`test/${language}/maintenance-guide/steps.md`,
+      sourcePath:'maintenance-test/guide/steps.md',targetPath:'maintenance-test/maintenance-guide/steps.md',
       url:`https://preview.example/${language}/old`,targetUrl:`https://preview.example/${language}/steps`,
-      references:[{direct:false,title:'引用文档',url:`https://preview.example/${language}/reference`}]}]
+      references:[
+        {id:`test/${language}/reference.md`,direct:false,title:'引用文档',url:`https://preview.example/${language}/reference`},
+        {id:`test/${language}/maintenance-guide/steps.md`,direct:false,title:'自身引用',url:`https://preview.example/${language}/steps`}
+      ]}]
   });
   const message=previewMessage({...options,sites:[site('en','Steps'),site('zh','维护步骤')],
     review:{pageCount:2,redirectCount:2,findings:[],redirectFailures:[]}});
@@ -69,5 +73,7 @@ test('bilingual preview notifications deep-link each review target within the sa
   assert(rows.some(row=>row.includes('zh/long/path/steps.md')));
   assert(rows.some(row=>row.includes('变更前路径 · maintenance-test/guide/steps.md')));
   assert(rows.some(row=>row.includes('变更后路径 · maintenance-test/maintenance-guide/steps.md')));
-  assert(rows.some(row=>row.includes('受影响的间接引用 · 引用文档')));
+  assert(rows.some(row=>row.includes('受影响的其他页面 · 引用文档')));
+  assert.equal(links.filter(item=>item.text==='引用文档').length,2);
+  assert(!rows.some(row=>row.includes('自身引用')));
 });
