@@ -92,12 +92,21 @@ function previewSites(value) {
   const sites=typeof value==='string'?JSON.parse(value):value;
   if(!Array.isArray(sites)||!sites.length||sites.length>2)throw Error('Deployed preview links are required');
   const languages=new Set();
+  const reviewUrl = sites[0].reviewUrl;
   for(const site of sites) {
     if(!['zh','en'].includes(site.language)||languages.has(site.language)||!/^[a-f0-9]{64}$/.test(site.digest))throw Error('Invalid deployed preview identity');languages.add(site.language);
     const url=new URL(site.url);
     const validOrigin = localPreviewMode()
       ? [localPreviewOrigin,localBrowserOrigin].includes(url.origin) : url.protocol==='https:';
     if(!validOrigin||url.username||url.password||url.hash||url.pathname!=='/community/document'||url.searchParams.get('preview')!==site.digest||url.searchParams.get('lang')!==site.language)throw Error('Invalid deployed document center URL');
+    if (reviewUrl!==undefined) {
+      const review = new URL(reviewUrl);
+      const path = /^\/document-previews\/([a-f0-9]{64})\/review\/[a-f0-9]{40}$/.exec(review.pathname);
+      if (site.reviewUrl!==reviewUrl || review.origin!==url.origin || review.username || review.password || review.search || review.hash ||
+          !path || !sites.some(candidate=>candidate.digest===path[1])) {
+        throw Error('Invalid unified preview URL');
+      }
+    }
     if(!Array.isArray(site.pages))throw Error('Changed page previews are required');
     const paths=new Set();
     for(const page of site.pages) {

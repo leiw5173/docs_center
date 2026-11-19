@@ -5,9 +5,9 @@ const {previewMessage,feishuPayloads,sendPreview}=require('../../scripts/documen
 const options={repository:'example/governance',number:16,revision:'a'.repeat(40),runId:'123',
   deployment:'success',reviewOutcome:'success',sites:[]};
 
-test('test addresses are included in a signed group notification, with clickable page links',async()=>{
-  const address='https://preview.example/test/changed-page';
-  const sites=[{language:'zh',url:'https://preview.example',pages:[{title:'变更正文',path:'zh/a.md',url:address}],redirects:[]}];
+test('the unified review address is included in a signed group notification',async()=>{
+  const address='https://preview.example/document-previews/digest/review/revision';
+  const sites=[{language:'zh',reviewUrl:address}];
   const message=previewMessage({...options,sites,review:{pageCount:1,redirectCount:0,findings:[],redirectFailures:[]}});
   const hook='https://open.feishu.cn/open-apis/bot/v2/hook/test-only';
   await sendPreview(hook,'sample-private-key',message,async(url,request)=>{
@@ -37,16 +37,18 @@ test('failed deployments can notify without a test link and large previews split
 test('local notifications give the host browser address instead of the runner network address',()=>{
   const url='http://document-review-preview-gateway/community/document?lang=zh';
   const page='http://document-review-preview-gateway/community/document/info?lang=zh';
-  const sites=[{language:'zh',url,pages:[{title:'变更正文',path:'zh/a.md',url:page}],redirects:[]}];
+  const reviewUrl='http://document-review-preview-gateway/document-previews/digest/review/revision';
+  const sites=[{language:'zh',url,reviewUrl,pages:[{title:'变更正文',path:'zh/a.md',url:page}],redirects:[]}];
   const message=previewMessage({...options,sites,local:true});
   assert.match(message.title,/本地测试网.*已部署完成/);
-  assert(message.paragraphs.flat().some(item=>item.href==='http://127.0.0.1:18098/community/document/info?lang=zh'));
+  assert(message.paragraphs.flat().some(item=>item.href==='http://127.0.0.1:18098/document-previews/digest/review/revision'));
   assert(!JSON.stringify(message).includes('document-review-preview-gateway'));
 });
 
-test('bilingual preview notifications group pages and migrations under each language',()=>{
+test('bilingual preview notifications include a single shared review link',()=>{
+  const reviewUrl='https://preview.example/document-previews/digest/review/revision';
   const site=(language,title)=>({
-    language,url:`https://preview.example/${language}`,
+    language,reviewUrl,url:`https://preview.example/${language}`,
     pages:[{title,path:`${language}/long/path/steps.md`,url:`https://preview.example/${language}/steps`}],
     redirects:[{sourcePath:'maintenance-test/guide/steps.md',targetPath:'maintenance-test/maintenance-guide/steps.md',
       url:`https://preview.example/${language}/old`,targetUrl:`https://preview.example/${language}/steps`,
@@ -54,12 +56,6 @@ test('bilingual preview notifications group pages and migrations under each lang
   });
   const message=previewMessage({...options,sites:[site('en','Steps'),site('zh','维护步骤')],
     review:{pageCount:2,redirectCount:2,findings:[],redirectFailures:[]}});
-  const lines=message.paragraphs.map(line=>line.map(item=>item.text).join(''));
-  assert.deepEqual(lines.filter(line=>line.startsWith('【')),['【浏览器复检】','【中文预览】 打开测试网','【英文预览】 打开测试网']);
-  assert(lines.includes('• 维护步骤'));
-  assert(lines.includes('• guide/steps.md → maintenance-guide/steps.md'));
-  assert(!lines.some(line=>line.includes('maintenance-test/')));
-  for(const lang of ['zh','en']) {
-    assert(message.paragraphs.flat().some(item=>item.href===`https://preview.example/${lang}/reference`));
-  }
+  const links=message.paragraphs.flat().filter(item=>item.href?.startsWith('https://preview.example'));
+  assert.deepEqual(links,[{tag:'a',text:'查看全部变更',href:reviewUrl}]);
 });

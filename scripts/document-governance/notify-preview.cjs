@@ -5,7 +5,6 @@ const {previewSites,localPreviewMode,localPreviewOrigin,localBrowserOrigin} = re
 
 const text = value => ({tag:'text',text:String(value)});
 const link = (label, href) => ({tag:'a',text:label,href});
-const shortPath = value => value.split('/').slice(-2).join('/');
 
 function previewMessage({repository, number, revision, runId, deployment, reviewOutcome, sites, review, local=false}) {
   if(!/^[\w-]+\/[\w.-]+$/.test(repository)||!Number.isSafeInteger(number)||
@@ -24,28 +23,15 @@ function previewMessage({repository, number, revision, runId, deployment, review
     section(text('【浏览器复检】'));
     paragraphs.push([text(`页面 ${review.pageCount} · 旧链接 ${review.redirectCount} · 阻断 ${failures} · 提醒 ${review.findings.length-failures}`)]);
   }
-  for(const site of [...sites].sort((a,b)=>b.language.localeCompare(a.language))) {
-    section(text(site.language==='zh'?'【中文预览】 ':'【英文预览】 '),link('打开测试网',site.url));
-    if(site.pages.length) paragraphs.push([text(`变更页面（${site.pages.length}）`)]);
-    for(const page of site.pages) paragraphs.push([text('• '),link(page.title || shortPath(page.path),page.url)]);
-    if(site.redirects.length) paragraphs.push([text(`旧链接跳转（${site.redirects.length}）`)]);
-    for(const migration of site.redirects) {
-      paragraphs.push([text('• '),link(shortPath(migration.sourcePath),migration.url),text(' → '),link(shortPath(migration.targetPath),migration.targetUrl)]);
-      for(const failure of review?.redirectFailures||[]) {
-        if(failure.language!==site.language||failure.sourcePath!==migration.sourcePath) continue;
-        paragraphs.push([text(`　跳转失败 · ${failure.reason}`)]);
-        for(const visited of failure.path) paragraphs.push([text('　实际经过 '+visited)]);
-      }
-      for(const ref of migration.references) {
-        const title = [ref.direct?'直接引用':'间接引用',ref.title,ref.section,ref.line?`第 ${ref.line} 行`:null].filter(Boolean).join(' · ');
-        paragraphs.push([text('　'),ref.url?link(title,ref.url):text(title)]);
-      }
-    }
-  }
+  const reviewUrl = sites[0]?.reviewUrl;
+  if(reviewUrl) section(link('查看全部变更',reviewUrl));
   if(review?.findings.length) section(text('【复检发现】'));
   for(const finding of review?.findings||[]) {
-    paragraphs.push([text('• '+(finding.severity==='error'?'阻断':'提醒')+' · '),
-      link(finding.title,finding.url),text(' · '+finding.message)]);
+    paragraphs.push([text(`• ${finding.severity==='error'?'阻断':'提醒'} · ${finding.title} · ${finding.message}`)]);
+  }
+  for(const failure of review?.redirectFailures||[]) {
+    paragraphs.push([text(`• 跳转失败 · ${failure.sourcePath} · ${failure.reason}`)]);
+    for(const visited of failure.path) paragraphs.push([text('　实际经过 '+visited)]);
   }
   if(local) {
     for(const paragraph of paragraphs) for(const item of paragraph) {
