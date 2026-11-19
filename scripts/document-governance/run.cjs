@@ -502,8 +502,10 @@ async function backendPreview() {
       if(mismatches.length) throw Error('预览目录与 index.md 声明不一致：'+mismatches.slice(0,12).map(doc=>scope.repoId+'/'+doc.path).join('、'));
     }
     sites.push({...site,pages:pages.filter(page=>visible.has(page.sourcePath))});
+    const siteFile=argument('--sites-file');
+    if(siteFile)fs.writeFileSync(siteFile,JSON.stringify(sites),{mode:0o600});
   }
-  if(process.env.GITHUB_OUTPUT)fs.appendFileSync(process.env.GITHUB_OUTPUT,`preview_sites=${JSON.stringify(sites)}\n`);
+  if(process.env.GITHUB_OUTPUT)fs.appendFileSync(process.env.GITHUB_OUTPUT,'preview_ready=true\n');
   console.log(`Backend preview created for PR head ${pr.head.sha}`);
 }
 async function main(){

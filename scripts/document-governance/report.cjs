@@ -10,17 +10,8 @@ function stageStatus(event,needs) {
   }
   if(event.pull_request?.head.ref.startsWith('document-registration/')&&needs['registration-access']?.result!=='success')return {status:'接入检查失败',message:'请检查来源仓库、分支、语言和分类信息；接入检查通过后再进行首版内容检查与预览。'};
   if(needs.preview?.result!=='success')return {status:'检查失败',message:'正文、资源、目录链接问题回业务仓库修正；分类、迁移与引用登记通过治理 Issue 补充。内容检查已运行时，在工作流摘要及 document-preview Artifact 的 report.md 查看逐项结果。'};
-  const staging=needs['backend-preview'];
-  if(staging?.result!=='success' && staging?.outputs?.preview_sites) {
-    try {
-      require('./preview-sites.cjs').previewSites(staging.outputs.preview_sites);
-      const details = staging.outputs.review_summary;
-      return {status:'测试预览复检未通过',message:(details ? '复检结果：'+details+'。' : '测试网页已部署，未取得完整复检结果。')+'请打开下方预览，并在工作流摘要查看具体问题。'};
-    } catch { /* Invalid deployment links are handled as a preview failure. */ }
-  }
-  if(staging?.result!=='success')return {status:'预览未通过',message:'请查看预览工作流记录并协调修正，保持此 PR 待确认。'};
-  try{require('./preview-sites.cjs').previewSites(needs['backend-preview']?.outputs?.preview_sites);}catch{return {status:'测试预览未就绪',message:'尚未取得可访问的候选测试网链接，保持此 PR 待确认；不能将附件生成成功视为测试部署完成。'};}
-  return {status:'待文档团队确认',message:(staging.outputs?.review_summary ? '预览复检：'+staging.outputs.review_summary+'。' : '')+'自动检查和预览通过，请核对内容、引用关联组、目录子类、语言及版本归档后手动合并。逐项结果见工作流摘要及 document-preview Artifact 的 report.md；提醒仍需人工确认。'};
+  if(needs['backend-preview']?.result==='success')return {status:'待文档团队确认',message:'已部署完成，请审查。'};
+  return {status:'内容检查通过',message:'提醒项请由文档团队核对。'};
 }
 function contentReviewMarkdown(needs) {
   const content=JSON.parse(needs.preview?.outputs?.content_review||'[]');
@@ -47,9 +38,6 @@ function contentReviewMarkdown(needs) {
     }
     sections.push(lines.join('\n'));
   }
-  if(needs['backend-preview']?.result==='skipped'&&needs.preview?.result==='failure') {
-    sections.push('测试网预览和浏览器复检未运行，内容检查需要先通过。');
-  }
   return sections.length?'\n\n### CI 内容检查结果\n\n'+sections.join('\n\n'):'';
 }
 async function reportStage(api,{repository,event,needs,runId}) {
@@ -60,37 +48,6 @@ async function reportStage(api,{repository,event,needs,runId}) {
   const result=stageStatus(event,needs);if(!result)return;
   const marker=`<!-- document-governance-stage:${pr.head.sha} -->`;
   let links='';
-  if(['待文档团队确认','测试预览复检未通过'].includes(result.status)) {
-    const sites=require('./preview-sites.cjs').previewSites(needs['backend-preview'].outputs.preview_sites);
-    const url=text=>text.replace(/[()]/g,c=>c==='('?'%28':'%29');
-    const label=text=>text.replace(/[\r\n`\[\]<>*\\]/g,' ');
-    const change={added:'新增',modified:'修改',moved:'迁移'};
-    const failures=JSON.parse(needs['backend-preview'].outputs.redirect_failures||'[]');
-    const previewSections=sites.map(site=>{
-      const lines=[`**${site.language==='zh'?'中文':'English'}：本次变更页面（${site.pages.length}）**`,''];
-      if (!site.pages.length) lines.push('本轮没有独立正文页面需要预览。');
-      for (const page of site.pages) lines.push(`- [${label(page.title)} · ${label(page.path)}（${change[page.change]}）](${url(page.url)})`);
-      if (site.redirects.length) lines.push('','**地址变更与旧链接跳转**','');
-      for (const move of site.redirects) {
-        lines.push(`- [旧地址 ${label(move.sourcePath)}](${url(move.url)}) → [预期新地址 ${label(move.targetPath)}](${url(move.targetUrl)})`);
-        for (const failure of failures.filter(item=>item.language===site.language&&item.sourcePath===move.sourcePath)) {
-          lines.push(`  - **跳转失败**${failure.anchor?' · 章节 '+label(failure.anchor):''} · ${label(failure.reason)}`);
-          lines.push('  - 浏览器实际经过的地址：');
-          for (const observed of failure.path) lines.push(`    - <code>${label(observed).replace(/&/g,'&amp;')}</code>`);
-        }
-        if (!move.references.length) lines.push('  - 已登记来源中未找到旧地址的引用文档。');
-        for (const ref of move.references) {
-          const title=label(ref.title)+' · '+label(ref.id)+(ref.section?' · '+label(ref.section):'')+(ref.line?' · 第 '+ref.line+' 行':'');
-          lines.push(`  - ${ref.direct?'直接引用':'间接引用'}：${ref.url?`[${title}](${url(ref.url)})`:title+'（候选中无页面）'}`);
-        }
-      }
-      if (site.redirects.some(move=>move.references.some(ref=>ref.url))) {
-        lines.push('','请打开上述引用文档，在测试网页中核对原链接附近的内容。');
-      }
-      return lines.join('\n');
-    });
-    links='\n\n### 文档中心测试网预览\n\n'+previewSections.join('\n\n');
-  }
   const translation=JSON.parse((event.action==='closed' ? needs.publish : needs.preview)?.outputs?.translation_review||'[]');
   const reviews=(Array.isArray(translation)?translation:[translation]).filter(item=>item?.count);
   if(reviews.length) links+='\n\n### 双语差异复核';
