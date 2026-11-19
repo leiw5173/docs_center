@@ -29,3 +29,25 @@ test('leave handled heads, direct pushes and unmerged PRs alone',async()=>{
     {...merged,number:9,merge_commit_sha:'b'.repeat(40)}]),handled:async()=>false,generate});
   assert.equal(direct.status,'not-a-merge');
 });
+
+test('direct dispatch is verified against the specific merge even if already handled',async()=>{
+  const calls=[];
+  const api=async route=>{
+    calls.push(route);
+    if(route.endsWith('/git/ref/heads/main'))return {object:{sha:commit}};
+    assert.equal(route,'/repos/example/docs/pulls/8');
+    return merged;
+  };
+  const result=await reconcileSource({source,api,notification:{commit,pullRequest:8},
+    handled:async()=>true,generate:async()=>assert.fail('duplicate candidate')});
+  assert.equal(result.status,'current');
+  assert.equal(result.pullRequest,8);
+  assert.equal(calls.length,2);
+  const rejected=await reconcileSource({source,api,notification:{commit:'b'.repeat(40),pullRequest:7},
+    handled:async()=>assert.fail('stale notification'),generate:async()=>assert.fail('stale notification')});
+  assert.equal(rejected.status,'superseded');
+  await assert.rejects(reconcileSource({source,notification:{commit,pullRequest:9},
+    api:async route=>route.endsWith('/git/ref/heads/main')?{object:{sha:commit}}:{...merged,number:9,merged_at:null},
+    handled:async()=>assert.fail('unverified notification'),generate:async()=>assert.fail('unverified notification')}),
+  /did not merge/);
+});

@@ -207,11 +207,21 @@ async function reconcileSources(registry,temp) {
   validateRegistry(registry);
   const repo=process.env.GITHUB_REPOSITORY;
   const ids=new Set((process.env.DOCUMENT_SOURCE_RECONCILE_IDS||'').split(',').map(id=>id.trim()).filter(Boolean));
-  const sources=registry.repositories.filter(source=>ids.has(source.id));
-  if(!ids.size||sources.length!==ids.size)throw Error('Recovery source list contains an unregistered source or is empty');
+  const registered=registry.repositories.filter(source=>ids.has(source.id));
+  if(!ids.size||registered.length!==ids.size)throw Error('Recovery source list contains an unregistered source or is empty');
+  const event=read(process.env.GITHUB_EVENT_PATH);
+  const input=process.env.GITHUB_EVENT_NAME==='workflow_dispatch' ? event.inputs||{} : {};
+  const notification=input.source_id||input.source_commit||input.source_pr ? {
+    sourceId:input.source_id,commit:input.source_commit,pullRequest:Number(input.source_pr)
+  } : null;
+  if(notification && (!ids.has(notification.sourceId)||!(/^[a-f0-9]{40}$/).test(notification.commit||'')||
+      !/^[1-9][0-9]*$/.test(input.source_pr||'')||!Number.isSafeInteger(notification.pullRequest))) {
+    throw Error('Invalid or unregistered source merge notification');
+  }
+  const sources=notification?registered.filter(source=>source.id===notification.sourceId):registered;
   for(const source of sources) {
     try {
-      const result=await reconcileSource({source,api,handled:async commit=>{
+      const result=await reconcileSource({source,api,notification,handled:async commit=>{
         for(const language of source.languages) {
           const scope=acceptedState(root,language).scopes.find(item=>item.repoId===source.id);
           if(scope?.commit===commit)continue;
@@ -220,7 +230,7 @@ async function reconcileSources(registry,temp) {
         }
         return true;
       },generate:event=>candidate(registry,fs.mkdtempSync(path.join(temp,'recovered-')),0,event)});
-      const message={current:'已有最新候选或发布清单',updated:'已补处理业务合并', 'not-a-merge':'分支顶部没有对应的合并 PR'};
+      const message={current:'已有最新候选或发布清单',updated:'已补处理业务合并', 'not-a-merge':'分支顶部没有对应的合并 PR',superseded:'该通知已落后于业务分支，将在后续运行核对最新提交'};
       console.log(`${source.id} · ${message[result.status]} · ${result.head.slice(0,12)}${result.pullRequest?' · 业务 PR #'+result.pullRequest:''}`);
     } catch(error) {
       console.error(`${source.id} · ${error.message}`);

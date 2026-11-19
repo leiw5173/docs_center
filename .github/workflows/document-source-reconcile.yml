@@ -3,6 +3,16 @@ on:
   schedule:
     - cron: '3,13,23,33,43,53 * * * *'
   workflow_dispatch:
+    inputs:
+      source_id:
+        description: 已登记的来源 ID
+        type: string
+      source_commit:
+        description: 合并后的完整提交 SHA
+        type: string
+      source_pr:
+        description: 已合并的业务 PR 编号
+        type: string
 permissions:
   contents: read
 concurrency:
