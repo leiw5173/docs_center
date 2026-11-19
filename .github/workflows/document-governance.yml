@@ -118,6 +118,7 @@ jobs:
       issues: read
     outputs:
       translation_review: ${{ steps.content.outputs.translation_review }}
+      content_review: ${{ steps.content.outputs.content_review || steps.onboarding.outputs.content_review }}
     needs: registration-access
     if: always() && github.event_name == 'pull_request' && github.event.action != 'closed' && (!startsWith(github.head_ref, 'document-registration/') || needs.registration-access.result == 'success')
     runs-on: ubuntu-latest
@@ -130,6 +131,7 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm test
       - name: Check initial content in the onboarding PR
+        id: onboarding
         if: startsWith(github.head_ref, 'document-registration/')
         run: node scripts/document-governance/run.cjs check-onboarding --output "$RUNNER_TEMP/document-preview"
       - name: Check immutable manifests and build previews

@@ -6,6 +6,7 @@ const {build,writePreview,validateRegistry,snapshot,sha,git,compareCandidate}=re
 const {referenceGroups,selectGroup,releaseLocation,acceptedState,scopeFingerprint,affectedRepositories}=require('./groups.cjs');
 const {registrationFromIssue}=require('./registration.cjs');
 const {checkTranslationReview}=require('./translation-review.cjs');
+const {commentSummary}=require('./check-report.cjs');
 const {onboardingFile,validateOnboarding,buildOnboarding,onboardingFiles}=require('./onboarding.cjs');
 const {bundleLocation,candidateLocation,makeBundle,validateBundle,candidateFiles}=require('./release-bundle.cjs');
 const root=path.resolve(__dirname,'../..');
@@ -258,7 +259,7 @@ async function check(registry,temp,fileOverride=null,outputOverride=null) {
   }
   const stable=m=>{const {warnings,...rest}=m;return rest;};
   if(JSON.stringify(stable(input))!==JSON.stringify(stable(result.manifest)))result.errors.push({code:'manifest-mismatch',message:'Registry or immutable source differs from reviewed manifest'});
-  const out=path.resolve(outputOverride||argument('--output',path.join(os.tmpdir(),'document-preview')));writePreview(result,out);
+  const out=path.resolve(outputOverride||argument('--output',path.join(os.tmpdir(),'document-preview')));const report=writePreview(result,out);
   if(process.env.GITHUB_STEP_SUMMARY)fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,fs.readFileSync(path.join(out,'report.md')));
   if(process.env.GITHUB_ACTIONS==='true') {
     const commandText=s=>String(s).replace(/%/g,'%25').replace(/\r/g,'%0D').replace(/\n/g,'%0A');
@@ -279,28 +280,43 @@ async function check(registry,temp,fileOverride=null,outputOverride=null) {
   for(const error of result.errors)console.error(JSON.stringify(error));
   console.log(JSON.stringify({manifestDigest:sha(JSON.stringify(input)),errors:result.errors.length,warnings:input.warnings.length,preview:out}));
   if(result.errors.length)process.exitCode=1;
-  return translation;
+  return {translation,content:commentSummary(report)};
 }
 function translationOutput(reviews) {
   if(process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT,
     `translation_review=${JSON.stringify(reviews.filter(item=>item?.count))}\n`);
 }
+function reviewOutput(results) {
+  translationOutput(results.map(result=>result.translation));
+  if(process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT,
+    `content_review=${JSON.stringify(results.map(result=>result.content))}\n`);
+}
+
+async function checkBundle(registry,temp,releases) {
+  const output=path.resolve(argument('--output',path.join(os.tmpdir(),'document-preview')));
+  const reviews=[];
+  for(const manifest of releases) {
+    try {
+      const file=releaseLocation(manifest.language,manifest.groupId).file;
+      if(JSON.stringify(read(path.join(root,file)))!==JSON.stringify(manifest)) throw Error('Canonical manifest differs from release bundle');
+      reviews.push(await check(registry,fs.mkdtempSync(path.join(temp,'language-')),file,path.join(output,manifest.language)));
+    } catch(error) {
+      console.error(`[${manifest.language}] ${error.message}`);
+      reviews.push({content:{language:manifest.language,incomplete:true}});
+      process.exitCode=1;
+    }
+  }
+  reviewOutput(reviews);
+}
+
 async function checkRelease(registry,temp) {
   const event=read(process.env.GITHUB_EVENT_PATH);
   const location=candidateLocation(event.pull_request.head.ref);
   if(!location.id) {
-    translationOutput([await check(registry,temp,location.file)]);
+    reviewOutput([await check(registry,temp,location.file)]);
     return;
   }
-  const releases=validateBundle(read(path.join(root,location.file)),location);
-  const output=path.resolve(argument('--output',path.join(os.tmpdir(),'document-preview')));
-  const reviews=[];
-  for(const manifest of releases) {
-    const file=releaseLocation(manifest.language,manifest.groupId).file;
-    if(JSON.stringify(read(path.join(root,file)))!==JSON.stringify(manifest)) throw Error('Canonical manifest differs from bilingual bundle');
-    reviews.push(await check(registry,fs.mkdtempSync(path.join(temp,'language-')),file,path.join(output,manifest.language)));
-  }
-  translationOutput(reviews);
+  await checkBundle(registry,temp,validateBundle(read(path.join(root,location.file)),location));
 }
 async function registration(registry,options={}) {
   const event=read(process.env.GITHUB_EVENT_PATH),issue=options.issue||event.issue,repo=process.env.GITHUB_REPOSITORY;
@@ -342,8 +358,7 @@ async function checkOnboarding(registry,temp){
  const event=read(process.env.GITHUB_EVENT_PATH),file=onboardingFile(event.pull_request.head.ref);
  if(registry.change?.onboarding!==file)throw Error('Onboarding file differs from registration branch');
  const bundle=read(path.join(root,file));validateOnboarding(registry,bundle);
- const out=path.resolve(argument('--output',path.join(os.tmpdir(),'document-preview')));
- for(const manifest of bundle.releases){const canonical=releaseLocation(manifest.language,manifest.groupId).file;if(JSON.stringify(read(path.join(root,canonical)))!==JSON.stringify(manifest))throw Error('Onboarding manifest differs from canonical release');await check(registry,temp,canonical,path.join(out,manifest.language));}
+ await checkBundle(registry,temp,bundle.releases);
 }
 async function listOnboardingCandidates(repo,language){
  const result=[];

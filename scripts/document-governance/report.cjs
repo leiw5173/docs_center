@@ -22,6 +22,35 @@ function stageStatus(event,needs) {
   try{require('./preview-sites.cjs').previewSites(needs['backend-preview']?.outputs?.preview_sites);}catch{return {status:'测试预览未就绪',message:'尚未取得可访问的候选测试网链接，保持此 PR 待确认；不能将附件生成成功视为测试部署完成。'};}
   return {status:'待文档团队确认',message:(staging.outputs?.review_summary ? '预览复检：'+staging.outputs.review_summary+'。' : '')+'自动检查和预览通过，请核对内容、引用关联组、目录子类、语言及版本归档后手动合并。逐项结果见工作流摘要及 document-preview Artifact 的 report.md；提醒仍需人工确认。'};
 }
+function contentReviewMarkdown(needs) {
+  const content=JSON.parse(needs.preview?.outputs?.content_review||'[]');
+  const sections=[];
+  const text=value=>String(value).replace(/[\r\n]/g,' ').replace(/[\\`*_{}[\]<>!@|~]/g,char=>
+    char==='@'?'＠':'\\'+char);
+  for(const review of content) {
+    const language=review.language==='zh'?'中文':'英文';
+    if(review.incomplete) {
+      sections.push(`**${language} · 检查未完成**。请查看工作流日志。`);
+      continue;
+    }
+    const lines=[`**${language} · ${review.errors?'未通过':'通过'}**，阻断 ${review.errors} 项，提醒 ${review.warnings} 项。`];
+    for(const [label,items,total] of [['阻断',review.blockers,review.errors],['提醒',review.reminders,review.warnings]]) {
+      if(!items.length)continue;
+      lines.push('');
+      for(const finding of items) {
+        const location=[finding.repo,finding.file].filter(Boolean).join(' / ')+
+          (Number.isSafeInteger(finding.line)?`（第 ${finding.line} 行）`:'');
+        lines.push('- '+[label,finding.category,location, finding.message].filter(Boolean).map(text).join(' · '));
+      }
+      if(total>items.length)lines.push(`- 另有 ${total-items.length} 项${label}，详见工作流中的完整报告。`);
+    }
+    sections.push(lines.join('\n'));
+  }
+  if(needs['backend-preview']?.result==='skipped'&&needs.preview?.result==='failure') {
+    sections.push('测试网预览和浏览器复检未运行，内容检查需要先通过。');
+  }
+  return sections.length?'\n\n### CI 内容检查结果\n\n'+sections.join('\n\n'):'';
+}
 async function reportStage(api,{repository,event,needs,runId}) {
   const pr=event.pull_request;if(!pr||pr.head.repo.full_name!==repository)return;
   if(!/^[\w-]+\/[\w.-]+$/.test(repository)||!/^\d+$/.test(String(runId))||!/^[a-f0-9]{40}$/.test(pr.head.sha))throw Error('Invalid status report identity');
@@ -72,7 +101,7 @@ async function reportStage(api,{repository,event,needs,runId}) {
       links+=`${translation.count} 处单语变更需要核对另一语言。请查看 CI 摘要里的文档清单。同步修改后重新生成候选，或由文档团队[开 Issue 记录接受的差异](${translation.url})并重跑检查。`;
     }
   }
-  const body=`${marker}\n### 文档维护状态：${result.status}\n\n${result.message}${links}\n\n候选修订：\`${pr.head.sha}\`\n\n[查看此次检查和执行记录](https://github.com/${repository}/actions/runs/${runId})`;
+  const body=`${marker}\n### 文档维护状态：${result.status}\n\n${result.message}${contentReviewMarkdown(needs)}${links}\n\n候选修订：\`${pr.head.sha}\`\n\n[查看此次检查和执行记录](https://github.com/${repository}/actions/runs/${runId})`;
   const commentsFound=[];
   for(let page=1;page<=20;page++) {
     const comments=await api(`/repos/${repository}/issues/${pr.number}/comments?per_page=100&page=${page}`);

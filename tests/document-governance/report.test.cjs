@@ -71,3 +71,30 @@ test('a deployed preview stays linked when browser review fails',async()=>{
   assert(comment.includes('安装 · 第 9 行'));
   assert(comment.includes('nodepath=a%2Fref.md&anchor=install'));
 });
+
+test('a failed bilingual PR comment shows both language results and explains why preview was skipped',async()=>{
+  const {commentSummary,checkReport}=require('../../scripts/document-governance/check-report.cjs');
+  const result=(language,errors,warnings)=>commentSummary(checkReport({manifest:{language,scopes:[],redirects:{
+    'test/zh/old.md':'test/zh/new.md'
+  }},errors,warnings}));
+  const reports=[
+    result('en',[{repo:'test',file:'en/maintenance-guide/index.md',line:5,code:'directory-introduction',
+      message:'请在 index.md 写一段目录介绍。'}],[]),
+    result('zh',[],[{repo:'test',file:'test/zh/old.md',code:'address-change',message:'Removed document'}])
+  ];
+  let comment;
+  const api=async(resource,method='GET',data)=>{
+    if(method==='GET'&&resource.endsWith('/pulls/7'))return {head:{sha}};
+    if(method==='GET')return [];
+    comment=data.body;
+    return {};
+  };
+  await reportStage(api,{repository:'example/governance',event,runId:123,needs:{
+    preview:{result:'failure',outputs:{content_review:JSON.stringify(reports)}},'backend-preview':{result:'skipped'}
+  }});
+  assert.match(comment,/英文 · 未通过.*阻断 1 项/);
+  assert.match(comment,/目录介绍 · test \/ en\/maintenance-guide\/index.md（第 5 行） · 请在 index.md 写一段目录介绍/);
+  assert.match(comment,/中文 · 通过.*阻断 0 项，提醒 1 项/);
+  assert.match(comment,/迁移到 test\/zh\/new.md/);
+  assert.match(comment,/测试网预览和浏览器复检未运行/);
+});
