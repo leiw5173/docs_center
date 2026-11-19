@@ -9,6 +9,7 @@ const {checkTranslationReview}=require('./translation-review.cjs');
 const {commentSummary}=require('./check-report.cjs');
 const {onboardingFile,validateOnboarding,buildOnboarding,onboardingFiles}=require('./onboarding.cjs');
 const {bundleLocation,candidateLocation,makeBundle,validateBundle,candidateFiles}=require('./release-bundle.cjs');
+const {reconcileSource}=require('./reconcile-source.cjs');
 const root=path.resolve(__dirname,'../..');
 const read=file=>JSON.parse(fs.readFileSync(file,'utf8'));
 const encode=value=>encodeURIComponent(value);
@@ -117,6 +118,9 @@ async function candidate(registry,temp,attempt=0,sourceOverride=null) {
       wanted=next;if(expansion===registry.repositories.length)throw Error('Reference group did not converge');
     }
     execFileSync('git',['-C',roots[incoming.id],'fetch','--quiet',`https://github.com/${incoming.repository}.git`,source.commit],{stdio:'pipe'});
+    if(sourceOverride?.requireExactTip&&source.commit!==revisions[incoming.id]) {
+      throw Error('Source branch advanced during recovery; the next recovery run will check the new tip');
+    }
     if(!['ahead','identical'].includes(compareCandidate(roots[incoming.id],source.commit,revisions[incoming.id])))throw Error('Source event is outside registered branch history');
     for(const old of known.values())if(roots[old.repoId]&&old.commit!==revisions[old.repoId]) {
       const registered=registry.repositories.find(r=>r.id===old.repoId);execFileSync('git',['-C',roots[old.repoId],'fetch','--quiet',`https://github.com/${registered.repository}.git`,old.commit],{stdio:'pipe'});
@@ -181,7 +185,7 @@ ${require('./check-report.cjs').migrationMarkdown(selected,repo)}`
     const members=[...new Set(items.flatMap(item=>item.group.repositories))];
     const title=`文档发布候选（${location.id?'中英文':items[0].language}：${members.join(', ')}）`;
     if(existing) {
-      await api(`/repos/${repo}/pulls/${existing.pr.number}`,'PATCH',{body,title});
+      if(existing.pr.body!==body||existing.pr.title!==title) await api(`/repos/${repo}/pulls/${existing.pr.number}`,'PATCH',{body,title});
       active.add(existing.pr.number);replacement.set(location.branch,existing.pr.number);
     } else {
       const metadata=await api(`/repos/${repo}`);
@@ -197,6 +201,31 @@ ${require('./check-report.cjs').migrationMarkdown(selected,repo)}`
     )));
     const next=matches.length?`请使用替代候选 ${matches.map(candidate=>'#'+replacement.get(candidate.location.branch)).join('、')}。`:'该候选的内容已与确认版本一致。';
     await api(`/repos/${repo}/pulls/${old.pr.number}`,'PATCH',{state:'closed',body:old.pr.body+'\n\n'+next});
+  }
+}
+async function reconcileSources(registry,temp) {
+  validateRegistry(registry);
+  const repo=process.env.GITHUB_REPOSITORY;
+  const ids=new Set((process.env.DOCUMENT_SOURCE_RECONCILE_IDS||'').split(',').map(id=>id.trim()).filter(Boolean));
+  const sources=registry.repositories.filter(source=>ids.has(source.id));
+  if(!ids.size||sources.length!==ids.size)throw Error('Recovery source list contains an unregistered source or is empty');
+  for(const source of sources) {
+    try {
+      const result=await reconcileSource({source,api,handled:async commit=>{
+        for(const language of source.languages) {
+          const scope=acceptedState(root,language).scopes.find(item=>item.repoId===source.id);
+          if(scope?.commit===commit)continue;
+          const pending=await listCandidates(repo,language);
+          if(!pending.some(item=>item.manifest.scopes.some(scope=>scope.repoId===source.id&&scope.commit===commit)))return false;
+        }
+        return true;
+      },generate:event=>candidate(registry,fs.mkdtempSync(path.join(temp,'recovered-')),0,event)});
+      const message={current:'已有最新候选或发布清单',updated:'已补处理业务合并', 'not-a-merge':'分支顶部没有对应的合并 PR'};
+      console.log(`${source.id} · ${message[result.status]} · ${result.head.slice(0,12)}${result.pullRequest?' · 业务 PR #'+result.pullRequest:''}`);
+    } catch(error) {
+      console.error(`${source.id} · ${error.message}`);
+      process.exitCode=1;
+    }
   }
 }
 function baseState(language,baseRevision) {
@@ -511,7 +540,7 @@ async function backendPreview() {
 async function main(){
   const registry=read(path.join(root,'document-center/registry.json'));
   const temp=fs.mkdtempSync(path.join(os.tmpdir(),'document-governance-'));
-  try{switch(process.argv[2]){case 'candidate':return await candidate(registry,temp);case 'registration':return await registration(registry);case 'governance-change':return await governanceChange();case 'validate-registry':return validateRegistry(registry);case 'check-registration':return checkRegistration(registry,temp);case 'check-onboarding':return checkOnboarding(registry,temp);case 'check':return await check(registry,temp);case 'check-release':return await checkRelease(registry,temp);case 'backend-preview':return await backendPreview();case 'publish':return await publish(registry,temp);case 'report-stage':return await require('./report.cjs').reportStage(api,{repository:process.env.GITHUB_REPOSITORY,event:read(process.env.GITHUB_EVENT_PATH),needs:JSON.parse(process.env.DOCUMENT_JOB_RESULTS||'{}'),runId:process.env.GITHUB_RUN_ID});default:throw Error('Use candidate, registration, governance-change, validate-registry, check-registration, check --manifest FILE, backend-preview, publish, or report-stage');}}finally{fs.rmSync(temp,{recursive:true,force:true});}
+  try{switch(process.argv[2]){case 'candidate':return await candidate(registry,temp);case 'reconcile-sources':return await reconcileSources(registry,temp);case 'registration':return await registration(registry);case 'governance-change':return await governanceChange();case 'validate-registry':return validateRegistry(registry);case 'check-registration':return checkRegistration(registry,temp);case 'check-onboarding':return checkOnboarding(registry,temp);case 'check':return await check(registry,temp);case 'check-release':return await checkRelease(registry,temp);case 'backend-preview':return await backendPreview();case 'publish':return await publish(registry,temp);case 'report-stage':return await require('./report.cjs').reportStage(api,{repository:process.env.GITHUB_REPOSITORY,event:read(process.env.GITHUB_EVENT_PATH),needs:JSON.parse(process.env.DOCUMENT_JOB_RESULTS||'{}'),runId:process.env.GITHUB_RUN_ID});default:throw Error('Use candidate, registration, governance-change, validate-registry, check-registration, check --manifest FILE, backend-preview, publish, or report-stage');}}finally{fs.rmSync(temp,{recursive:true,force:true});}
 }
 if(require.main===module)main().catch(e=>{console.error(e.message);process.exitCode=1;});
 module.exports={cloneSources,registrationFromIssue,registration,candidate,writeCandidate,checkRegistration};
