@@ -82,6 +82,14 @@ async function sendPreview(webhook, secret, message, request=fetch) {
 
 async function main() {
   const webhook = process.env.DOCUMENT_PREVIEW_FEISHU_WEBHOOK;
+  const secret = process.env.DOCUMENT_PREVIEW_FEISHU_SECRET;
+  if(process.argv[2]==='--test') {
+    if(!webhook) throw Error('未配置飞书机器人 Webhook。');
+    await sendPreview(webhook,secret,{title:'文档中心测试网 · 飞书通知验证',
+      paragraphs:[[text('这是一条机器人验证消息。')]]});
+    console.log('飞书接口已接受验证消息。');
+    return;
+  }
   if(!webhook) {
     console.log('未配置飞书机器人，已跳过通知。');
     return;
@@ -98,7 +106,7 @@ async function main() {
     deployment:process.env.DOCUMENT_PREVIEW_DEPLOYMENT_OUTCOME,reviewOutcome:process.env.DOCUMENT_PREVIEW_REVIEW_OUTCOME,
     sites:locations?previewSites(locations):[],review:readOptional('review.json')
   });
-  await sendPreview(webhook,process.env.DOCUMENT_PREVIEW_FEISHU_SECRET,message);
+  await sendPreview(webhook,secret,message);
   console.log('文档中心测试网结果已发送到飞书。');
 }
 

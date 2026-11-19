@@ -5,6 +5,11 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, closed]
   workflow_dispatch:
+    inputs:
+      test_feishu:
+        description: 仅发送一条飞书机器人验证消息
+        type: boolean
+        default: false
   issues:
     types: [opened, edited]
 permissions:
@@ -13,9 +18,25 @@ concurrency:
   group: document-governance-${{ github.event.client_payload.repository || github.event.issue.number || github.event.pull_request.number || github.run_id }}
   cancel-in-progress: false
 jobs:
+  test-feishu:
+    name: document-test-feishu
+    if: github.event_name == 'workflow_dispatch' && inputs.test_feishu && github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-24.04
+    environment: document-preview
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/document-governance/notify-preview.cjs --test
+        env:
+          DOCUMENT_PREVIEW_FEISHU_WEBHOOK: ${{ secrets.DOCUMENT_PREVIEW_FEISHU_WEBHOOK }}
+          DOCUMENT_PREVIEW_FEISHU_SECRET: ${{ secrets.DOCUMENT_PREVIEW_FEISHU_SECRET }}
   manual-checks:
     name: document-manual-checks
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && !inputs.test_feishu
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
