@@ -43,4 +43,24 @@ test('source notification creates one isolated group PR, merges linked candidate
   assert.deepEqual(JSON.parse(combinedFiles[combinedPath]).groupRepositories,['a','b']);assert(combinedFiles['document-center/state/zh/b.json']);
   await run();assert.equal(prs.length,2);assert.equal(prs.find(p=>p.state==='open').number,combined.number);
   const beforeHead=refs.get(combined.branch);await assert.rejects(()=>writeCandidate('example/governance',{branch:combined.branch,file:combinedPath},JSON.parse(combinedFiles[combinedPath]),{pr:{head:{sha:'f'.repeat(40)}}}),error=>error.httpStatus===409);assert.equal(refs.get(combined.branch),beforeHead);
+  // Adding a second language to this source's pending update coalesces it with the existing Chinese group.
+  registry.repositories[0].languages.push('en');
+  fs.mkdirSync(path.join(a.dir,'en'));
+  fs.writeFileSync(path.join(a.dir,'en/index.md'),'# English\n\nThis section covers board setup.');
+  a.git('add','.');a.git('-c','user.name=Test','-c','user.email=test@example.invalid','commit','--quiet','-m','add English');a.commit=a.git('rev-parse','HEAD');
+  await run();
+  assert.equal(combined.state,'closed');
+  const bilingual=prs.find(p=>p.state==='open');
+  assert.match(bilingual.branch,/^document-release\/bilingual\/g-/);
+  assert.equal(prs.filter(p=>p.state==='open').length,1);
+  const bilingualFiles=commits.get(refs.get(bilingual.branch)).files;
+  const bundle=JSON.parse(bilingualFiles[Object.keys(bilingualFiles).find(file=>file.startsWith('document-center/bilingual/'))]);
+  assert.deepEqual(bundle.releases.map(release=>[release.language,release.groupRepositories]),[['en',['a']],['zh',['a','b']]]);
+  assert.equal(bundle.releases[0].scopes[0].commit,bundle.releases[1].scopes[0].commit);
+  assert(bilingualFiles['document-center/state/en/a.json']);
+  assert(bilingualFiles['document-center/state/zh/a.json']);
+  await run();
+  assert.equal(prs.filter(p=>p.state==='open').length,1);
+  assert.equal(prs.find(p=>p.state==='open').number,bilingual.number);
+
 });

@@ -3,10 +3,11 @@ const os=require('node:os');
 const path=require('node:path');
 const {execFileSync}=require('node:child_process');
 const {build,writePreview,validateRegistry,snapshot,sha,git,compareCandidate}=require('./core.cjs');
-const {referenceGroups,selectGroup,releaseLocation,parseReleaseBranch,acceptedState,scopeFingerprint,affectedRepositories}=require('./groups.cjs');
+const {referenceGroups,selectGroup,releaseLocation,acceptedState,scopeFingerprint,affectedRepositories}=require('./groups.cjs');
 const {registrationFromIssue}=require('./registration.cjs');
 const {checkTranslationReview}=require('./translation-review.cjs');
 const {onboardingFile,validateOnboarding,buildOnboarding,onboardingFiles}=require('./onboarding.cjs');
+const {bundleLocation,candidateLocation,makeBundle,validateBundle,candidateFiles}=require('./release-bundle.cjs');
 const root=path.resolve(__dirname,'../..');
 const read=file=>JSON.parse(fs.readFileSync(file,'utf8'));
 const encode=value=>encodeURIComponent(value);
@@ -51,10 +52,13 @@ async function listCandidates(repo,language) {
   for(let page=1;page<=20;page++) {
     const prs=await api(`/repos/${repo}/pulls?state=open&per_page=100&page=${page}`);
     for(const pr of prs) {
-      if(pr.head.repo?.full_name!==repo||!pr.head.ref.startsWith(`document-release/${language}`))continue;
-      let location;try{location=parseReleaseBranch(pr.head.ref);}catch{continue;}
+      if(pr.head.repo?.full_name!==repo||!pr.head.ref.startsWith('document-release/'))continue;
+      let location;try{location=candidateLocation(pr.head.ref);}catch{continue;}
+      if(!location.id&&location.language!==language) continue;
       const content=await api(`/repos/${repo}/contents/${location.file}?ref=${encode(pr.head.sha)}`);
-      results.push({pr,location,content,manifest:JSON.parse(Buffer.from(content.content,'base64').toString())});
+      const document=JSON.parse(Buffer.from(content.content,'base64').toString());
+      const manifest=location.id?validateBundle(document,location).find(item=>item.language===language):document;
+      results.push({pr,location,content,manifest,...(location.id?{releaseBundle:document}:{})});
     }
     if(prs.length<100)return results;
   }
@@ -74,10 +78,9 @@ async function writeCandidate(repo,location,manifest,existing) {
     }catch(error){if(error.httpStatus!==404)throw error;await api(`/repos/${repo}/git/refs`,'POST',{ref:`refs/heads/${location.branch}`,sha:base});head=base;}
   }
   const parent=await api(`/repos/${repo}/git/commits/${base}`);
-  const files={[location.file]:JSON.stringify(manifest,null,2)+'\n'};
-  for(const scope of manifest.scopes)files[`document-center/state/${manifest.language}/${scope.repoId}.json`]=JSON.stringify({repoId:scope.repoId,groupId:manifest.groupId},null,2)+'\n';
+  const files=candidateFiles(location,manifest);
   const tree=await api(`/repos/${repo}/git/trees`,'POST',{base_tree:parent.tree.sha,tree:Object.entries(files).map(([file,content])=>({path:file,mode:'100644',type:'blob',content}))});
-  const commit=await api(`/repos/${repo}/git/commits`,'POST',{message:`docs: update ${manifest.language} reference group ${manifest.groupId}`,tree:tree.sha,parents:head===base?[head]:[head,base]});
+  const commit=await api(`/repos/${repo}/git/commits`,'POST',{message:`docs: update release candidate ${location.branch}`,tree:tree.sha,parents:head===base?[head]:[head,base]});
   await api(`/repos/${repo}/git/refs/heads/${location.branch}`,'PATCH',{sha:commit.sha,force:false});
 }
 async function candidate(registry,temp,attempt=0,sourceOverride=null) {
@@ -87,6 +90,7 @@ async function candidate(registry,temp,attempt=0,sourceOverride=null) {
   if(!incoming||!/^[a-f0-9]{40}$/.test(source.commit||''))throw Error('Unregistered or unpinned source event');
   const repo=process.env.GITHUB_REPOSITORY;
   if(!/^[\w-]+\/[\w.-]+$/.test(repo||''))throw Error('Invalid governance repository');
+  const plans=[],superseded=[];
   for(const language of incoming.languages) {
     const previous=acceptedState(root,language),pending=await listCandidates(repo,language);
     const onboarding=await listOnboardingCandidates(repo,language),reserved=affectedRepositories([incoming.id],onboarding);if(onboarding.some(p=>p.manifest.scopes.some(s=>reserved.has(s.repoId))))throw Error('Related source has an onboarding PR pending; refresh that PR before generating a separate candidate');
@@ -119,23 +123,79 @@ async function candidate(registry,temp,attempt=0,sourceOverride=null) {
     }
     const completed=new Set();
     for(const group of groups) {
-      const selected=selectGroup(result,group),location=releaseLocation(language,group.groupId);
-      const existing=pending.find(p=>p.location.branch===location.branch);
+      const selected=selectGroup(result,group);
+      const existing=pending.find(p=>p.manifest.groupId===group.groupId);
       const unchanged=group.repositories.every(id=>scopeFingerprint(selected.manifest.scopes.find(s=>s.repoId===id))===scopeFingerprint(previous.scopes.find(s=>s.repoId===id)));
-      if(!existing&&unchanged){for(const id of group.repositories)completed.add(id);continue;}
-      if(!existing||JSON.stringify(existing.manifest)!==JSON.stringify(selected.manifest)) {
-        try{await writeCandidate(repo,location,selected.manifest,existing);}
-        catch(error){if([409,422].includes(error.httpStatus)&&attempt<3)return candidate(registry,fs.mkdtempSync(path.join(temp,'retry-')),attempt+1,source);throw error;}
-      }
-      const migrationReport=require('./check-report.cjs').migrationMarkdown(selected,repo);
-      const body=`引用关联组：${group.repositories.join(', ')}\n\n清单 SHA-256：${selected.digest}\n\n阻断问题：${selected.errors.length}；人工核对项：${selected.warnings.length}。查看检查报告和预览。\n\n${migrationReport}\n\n- [ ] 内容完整性、直接及间接引用、目录子类已核对\n- [ ] 标签、反馈、地址迁移及版本归档已核对\n- [ ] 预览通过，由文档团队手动合并\n\n同组新修订更新本 PR；未关联来源独立发布。`;
-      if(existing)await api(`/repos/${repo}/pulls/${existing.pr.number}`,'PATCH',{body});
-      else {const metadata=await api(`/repos/${repo}`);await api(`/repos/${repo}/pulls`,'POST',{title:`文档发布候选（${language}：${group.repositories.join(', ')}）`,head:location.branch,base:metadata.default_branch,body});}
-      for(const id of group.repositories)completed.add(id);
+      group.repositories.forEach(id=>completed.add(id));
+      if(!existing&&unchanged)continue;
+      plans.push({selected,group,language,unchanged});
     }
-    for(const old of pending)if(old.manifest.scopes.some(s=>wanted.has(s.repoId))&&!groups.some(g=>g.groupId===old.manifest.groupId)&&old.manifest.scopes.every(s=>completed.has(s.repoId))) {
-      await api(`/repos/${repo}/pulls/${old.pr.number}`,'PATCH',{state:'closed',body:old.pr.body+'\n\n此候选已由重新计算的引用关联组替代，请审核新的发布 PR。'});
+    for(const old of pending) {
+      if(old.manifest.scopes.some(scope=>wanted.has(scope.repoId))&&old.manifest.scopes.every(scope=>completed.has(scope.repoId))) superseded.push(old);
     }
+  }
+
+  const candidates=[];
+  const addBilingual=items=>{
+    const bundle=makeBundle(items.map(plan=>plan.selected.manifest));
+    candidates.push({plans:items,document:bundle,location:bundleLocation(bundle.bundleId)});
+  };
+  for(const old of superseded) {
+    if(!old.releaseBundle||superseded.filter(item=>item.pr.number===old.pr.number).length===2)continue;
+    const updated=plans.find(plan=>plan.language===old.manifest.language&&plan.group.groupId===old.manifest.groupId);
+    if(!updated)throw Error('Refresh the affected reference groups from a shared bilingual source first');
+    const peer=old.releaseBundle.releases.find(manifest=>manifest.language!==old.manifest.language);
+    const peerPlan={selected:{manifest:peer,digest:sha(JSON.stringify(peer)),errors:[],warnings:peer.warnings||[]},
+      group:{groupId:peer.groupId,repositories:peer.groupRepositories},language:peer.language,unchanged:false};
+    if(updated.unchanged)plans.push(peerPlan);
+    else addBilingual([updated,peerPlan]);
+  }
+  const related=plans.filter(plan=>!plan.unchanged&&plan.group.repositories.includes(incoming.id)&&
+    !candidates.some(candidate=>candidate.plans.includes(plan)));
+  if(related.length===2)addBilingual(related);
+  for(const plan of plans) {
+    if(!plan.unchanged&&!candidates.some(candidate=>candidate.plans.includes(plan))) {
+      candidates.push({plans:[plan],document:plan.selected.manifest,location:releaseLocation(plan.language,plan.group.groupId)});
+    }
+  }
+  const active=new Set(),replacement=new Map();
+  for(const {plans:items,document,location} of candidates) {
+    const existing=superseded.find(old=>old.location.branch===location.branch);
+    const previous=existing?.releaseBundle||existing?.manifest;
+    if(!existing||JSON.stringify(previous)!==JSON.stringify(document)) {
+      try{await writeCandidate(repo,location,document,existing);}
+      catch(error){if([409,422].includes(error.httpStatus)&&attempt<3)return candidate(registry,fs.mkdtempSync(path.join(temp,'retry-')),attempt+1,source);throw error;}
+    }
+    const body=items.map(({selected,group,language})=>
+      `### ${language==='zh'?'中文':'English'}
+
+引用关联组：${group.repositories.join(', ')}
+
+清单 SHA-256：${selected.digest}
+
+阻断问题：${selected.errors.length}，人工核对项：${selected.warnings.length}。
+
+${require('./check-report.cjs').migrationMarkdown(selected,repo)}`
+    ).join('\n\n')+'\n\n- [ ] 检查和预览均通过，由文档团队审核并手动合并。';
+    const members=[...new Set(items.flatMap(item=>item.group.repositories))];
+    const title=`文档发布候选（${location.id?'中英文':items[0].language}：${members.join(', ')}）`;
+    if(existing) {
+      await api(`/repos/${repo}/pulls/${existing.pr.number}`,'PATCH',{body,title});
+      active.add(existing.pr.number);replacement.set(location.branch,existing.pr.number);
+    } else {
+      const metadata=await api(`/repos/${repo}`);
+      const created=await api(`/repos/${repo}/pulls`,'POST',{title,head:location.branch,base:metadata.default_branch,body});
+      active.add(created.number);replacement.set(location.branch,created.number);
+    }
+  }
+  for(const old of new Map(superseded.map(item=>[item.pr.number,item])).values()) {
+    if(active.has(old.pr.number))continue;
+    const previousGroups=superseded.filter(item=>item.pr.number===old.pr.number).map(item=>item.manifest);
+    const matches=candidates.filter(candidate=>candidate.plans.some(plan=>previousGroups.some(manifest=>
+      plan.language===manifest.language&&plan.group.repositories.some(id=>manifest.groupRepositories.includes(id))
+    )));
+    const next=matches.length?`请使用替代候选 ${matches.map(candidate=>'#'+replacement.get(candidate.location.branch)).join('、')}。`:'该候选的内容已与确认版本一致。';
+    await api(`/repos/${repo}/pulls/${old.pr.number}`,'PATCH',{state:'closed',body:old.pr.body+'\n\n'+next});
   }
 }
 function baseState(language,baseRevision) {
@@ -176,10 +236,11 @@ function reportTranslationReview(review,prNumber) {
   if(review.issue) lines.push('',`已由文档团队通过 Issue #${review.issue} 记录接受的差异。`);
   else lines.push('',`发布 PR #${prNumber} 有单语修改，且另一语言有未同步的对应页面。请同步修改，或由文档团队 [记录接受的差异](${review.issueUrl}) 后重跑检查。`);
   if(process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,lines.join('\n')+'\n');
-  if(process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT,`translation_review=${JSON.stringify({count:review.differences.length,issue:review.issue,url:review.issueUrl})}\n`);
+
 }
 
 async function check(registry,temp,fileOverride=null,outputOverride=null) {
+  let translation;
   const file=fileOverride||argument('--manifest');if(!file)throw Error('--manifest is required');
   const input=read(path.resolve(root,file)),selectedIds=new Set(input.scopes.map(s=>s.repoId));
   const selectedRegistry={schemaVersion:1,repositories:registry.repositories.filter(r=>selectedIds.has(r.id))};
@@ -212,11 +273,34 @@ async function check(registry,temp,fileOverride=null,outputOverride=null) {
   if (process.env.GITHUB_EVENT_NAME==='pull_request' && pr?.head.ref.startsWith('document-release/')) {
     const review=await translationReview(pr,input,roots,undefined,previous);
     reportTranslationReview(review,pr.number);
+    translation={language:input.language,count:review.differences.length,issue:review.issue,url:review.issueUrl};
     if(review.issueUrl) process.exitCode=1;
   }
   for(const error of result.errors)console.error(JSON.stringify(error));
   console.log(JSON.stringify({manifestDigest:sha(JSON.stringify(input)),errors:result.errors.length,warnings:input.warnings.length,preview:out}));
   if(result.errors.length)process.exitCode=1;
+  return translation;
+}
+function translationOutput(reviews) {
+  if(process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT,
+    `translation_review=${JSON.stringify(reviews.filter(item=>item?.count))}\n`);
+}
+async function checkRelease(registry,temp) {
+  const event=read(process.env.GITHUB_EVENT_PATH);
+  const location=candidateLocation(event.pull_request.head.ref);
+  if(!location.id) {
+    translationOutput([await check(registry,temp,location.file)]);
+    return;
+  }
+  const releases=validateBundle(read(path.join(root,location.file)),location);
+  const output=path.resolve(argument('--output',path.join(os.tmpdir(),'document-preview')));
+  const reviews=[];
+  for(const manifest of releases) {
+    const file=releaseLocation(manifest.language,manifest.groupId).file;
+    if(JSON.stringify(read(path.join(root,file)))!==JSON.stringify(manifest)) throw Error('Canonical manifest differs from bilingual bundle');
+    reviews.push(await check(registry,fs.mkdtempSync(path.join(temp,'language-')),file,path.join(output,manifest.language)));
+  }
+  translationOutput(reviews);
 }
 async function registration(registry,options={}) {
   const event=read(process.env.GITHUB_EVENT_PATH),issue=options.issue||event.issue,repo=process.env.GITHUB_REPOSITORY;
@@ -307,6 +391,17 @@ async function governanceChange(attempt=0) {
     await registration(read(path.join(root,'document-center/registry.json')),{entry,bundle:existing.bundle,issue:{number:Number(branch.split('issue-')[1]),title:'[文档接入] 治理补充',user:issue.user}});
     console.log(`Governance issue #${issue.number} applied atomically to onboarding PR #${existing.pr.number}; CI must rerun`);return;
   }
+  if(existing.releaseBundle) {
+    try{await writeCandidate(repo,existing.location,existing.releaseBundle,existing);}
+    catch(error){if([409,422].includes(error.httpStatus)&&attempt<3)return governanceChange(attempt+1);throw error;}
+    if(['引用登记','地址迁移'].includes(value('调整类型'))) {
+      const selected=manifest.scopes.find(s=>target.startsWith(s.repoId+'/'));
+      const temp=fs.mkdtempSync(path.join(os.tmpdir(),'bilingual-regroup-'));
+      try{await candidate(read(path.join(root,'document-center/registry.json')),temp,0,{repository:selected.repository,commit:selected.commit});}
+      finally{fs.rmSync(temp,{recursive:true,force:true});}
+    }
+    return;
+  }
   try{await api(`/repos/${repo}/contents/${existing.location.file}`,'PUT',{branch,sha:existing.content.sha,message:`docs: apply governance issue #${issue.number}`,content:Buffer.from(JSON.stringify(manifest,null,2)+'\n').toString('base64')});}
   catch(error){if(error.httpStatus===409&&attempt<3)return governanceChange(attempt+1);throw error;}
   if(['引用登记','地址迁移'].includes(value('调整类型'))){const scope=manifest.scopes.find(s=>s.repoId===target.split('/')[0]);const temp=fs.mkdtempSync(path.join(os.tmpdir(),'governance-regroup-'));try{await candidate(read(path.join(root,'document-center/registry.json')),temp,0,{repository:scope.repository,commit:scope.commit});}finally{fs.rmSync(temp,{recursive:true,force:true});}}
@@ -318,19 +413,28 @@ async function publish(registry,temp) {
   const expected=process.env.GITHUB_REPOSITORY;
   const registration=/^document-registration\/issue-[1-9][0-9]*$/.test(pr.head.ref);
   if(pr.base.repo.full_name!==expected||pr.head.repo.full_name!==expected)throw Error('Unexpected release PR origin');
-  const location=registration?null:parseReleaseBranch(pr.head.ref);
-  const document=registration?{registry:read(path.join(root,'document-center/registry.json')),onboarding:read(path.join(root,onboardingFile(pr.head.ref)))}:{manifest:read(path.join(root,location.file))};
+  const location=registration?null:candidateLocation(pr.head.ref);
+  const document=registration
+    ? {registry:read(path.join(root,'document-center/registry.json')),onboarding:read(path.join(root,onboardingFile(pr.head.ref)))}
+    : {[location.id?'bundle':'manifest']:read(path.join(root,location.file))};
   if(!registration) {
+    const manifests=location.id?validateBundle(document.bundle,location):[document.manifest];
     const baseRevision=git(root,'rev-parse','HEAD^1').toString().trim();
-    const revisions=Object.fromEntries(document.manifest.scopes.map(scope=>[scope.repoId,scope.commit]));
-    const roots=cloneSources({repositories:registry.repositories.filter(source=>Object.hasOwn(revisions,source.id))},revisions,temp);
-    const review=await translationReview(pr,document.manifest,roots,baseRevision);
-    reportTranslationReview(review,pr.number);
-    if(review.issueUrl) throw Error('Publication blocked: document maintainer must record acceptance of the bilingual difference');
+    const reviews=[];
+    for(const manifest of manifests) {
+      const revisions=Object.fromEntries(manifest.scopes.map(scope=>[scope.repoId,scope.commit]));
+      const sources=registry.repositories.filter(source=>Object.hasOwn(revisions,source.id));
+      const roots=cloneSources({repositories:sources},revisions,fs.mkdtempSync(path.join(temp,'language-')));
+      const review=await translationReview(pr,manifest,roots,baseRevision);
+      reportTranslationReview(review,pr.number);
+      reviews.push({language:manifest.language,count:review.differences.length,issue:review.issue,url:review.issueUrl});
+    }
+    translationOutput(reviews);
+    if(reviews.some(review=>review.url)) throw Error('Publication blocked: document maintainer must record acceptance of the bilingual difference');
   }
   const base=process.env.DOCUMENT_PUBLISH_URL,token=process.env.DOCUMENT_RELEASE_TOKEN;
   if(!base||!token)throw Error('Protected release environment is not configured');
-  const url=new URL(registration?'/admin/documents/governance/registration':'/admin/documents/releases',base);if(url.protocol!=='https:')throw Error('Release endpoint must use HTTPS');
+  const url=new URL(registration?'/admin/documents/governance/registration':location.id?'/admin/documents/releases/bilingual':'/admin/documents/releases',base);if(url.protocol!=='https:')throw Error('Release endpoint must use HTTPS');
   const response=await fetch(url,{method:'POST',redirect:'error',headers:{'Content-Type':'application/json','X-Document-Release-Token':token},body:JSON.stringify({governanceRepository:expected,governanceCommit:pr.merge_commit_sha,pullRequest:pr.number,...document}),signal:AbortSignal.timeout(120000)});
   if(!response.ok)throw Error(`Release request failed: HTTP ${response.status}; check the PR result before retrying`);
   console.log(JSON.stringify(await response.json()));
@@ -341,7 +445,10 @@ async function backendPreview() {
   const remoteFile=async file=>{const content=await api(`/repos/${repo}/contents/${file}?ref=${pr.head.sha}`);return JSON.parse(Buffer.from(content.content,'base64').toString());};
   const onboarding=pr.head.ref.startsWith('document-registration/');let registration,manifests;
   if(onboarding){registration=await remoteFile('document-center/registry.json');const file=onboardingFile(pr.head.ref);if(registration.change?.onboarding!==file)throw Error('Unexpected onboarding preview path');const bundle=await remoteFile(file);validateOnboarding(registration,bundle);manifests=bundle.releases;}
-  else manifests=[await remoteFile(parseReleaseBranch(pr.head.ref).file)];
+  else {
+    const location=candidateLocation(pr.head.ref), document=await remoteFile(location.file);
+    manifests=location.id?validateBundle(document,location):[document];
+  }
   const base=process.env.DOCUMENT_PREVIEW_URL,token=process.env.DOCUMENT_PREVIEW_TOKEN;
   if(!base||!token)throw Error('Backend candidate preview environment is not configured');
   const url=new URL('/admin/documents/previews',base);if(url.protocol!=='https:')throw Error('Preview endpoint must use HTTPS');
@@ -350,13 +457,13 @@ async function backendPreview() {
     const response=await fetch(url,{method:'POST',redirect:'error',headers:{'Content-Type':'application/json','X-Document-Preview-Token':token},body:JSON.stringify(onboarding?{registration,manifest}:manifest),signal:AbortSignal.timeout(120000)});
     if(!response.ok||!response.headers.get('content-type')?.includes('application/zip'))throw Error(`Backend preview failed: HTTP ${response.status}`);
     const chunks=[];let size=0;for await(const chunk of response.body){size+=chunk.length;if(size>128*1024*1024)throw Error('Preview exceeds 128 MiB');chunks.push(chunk);}
-    const configured=argument('--output',path.join(os.tmpdir(),'backend-preview.zip'));const out=onboarding?path.join(path.dirname(path.resolve(configured)),`onboarding-${manifest.language}.zip`):configured;
+    const configured=argument('--output',path.join(os.tmpdir(),'backend-preview.zip'));const out=manifests.length>1||onboarding?path.join(path.dirname(path.resolve(configured)),`preview-${manifest.language}.zip`):configured;
     fs.mkdirSync(path.dirname(out),{recursive:true});fs.writeFileSync(out,Buffer.concat(chunks));
     const digest=sha(JSON.stringify(manifest)),siteUrl=response.headers.get('x-document-preview-url');
     if(!siteUrl)throw Error('Candidate artifact exists but test site was not deployed');
     const previous=baseState(manifest.language);
     const reportDirectory=argument('--check-report');
-    const report=reportDirectory ? read(path.join(reportDirectory,...(onboarding?[manifest.language]:[]),'report.json')) : null;
+    const report=reportDirectory ? read(path.join(reportDirectory,...(onboarding||manifests.length>1?[manifest.language]:[]),'report.json')) : null;
     if(report && (report.language!==manifest.language || !Array.isArray(report.migrationReferences))) throw Error('Invalid candidate migration report');
     const redirects=previews.migrationPreviews(manifest,previous,siteUrl,report?.migrationReferences);
     const pages=previews.changedPages(manifest,previous,siteUrl,{declaredOnly:true});
@@ -387,7 +494,7 @@ async function backendPreview() {
 async function main(){
   const registry=read(path.join(root,'document-center/registry.json'));
   const temp=fs.mkdtempSync(path.join(os.tmpdir(),'document-governance-'));
-  try{switch(process.argv[2]){case 'candidate':return await candidate(registry,temp);case 'registration':return await registration(registry);case 'governance-change':return await governanceChange();case 'validate-registry':return validateRegistry(registry);case 'check-registration':return checkRegistration(registry,temp);case 'check-onboarding':return checkOnboarding(registry,temp);case 'check':return await check(registry,temp);case 'backend-preview':return await backendPreview();case 'publish':return await publish(registry,temp);case 'report-stage':return await require('./report.cjs').reportStage(api,{repository:process.env.GITHUB_REPOSITORY,event:read(process.env.GITHUB_EVENT_PATH),needs:JSON.parse(process.env.DOCUMENT_JOB_RESULTS||'{}'),runId:process.env.GITHUB_RUN_ID});default:throw Error('Use candidate, registration, governance-change, validate-registry, check-registration, check --manifest FILE, backend-preview, publish, or report-stage');}}finally{fs.rmSync(temp,{recursive:true,force:true});}
+  try{switch(process.argv[2]){case 'candidate':return await candidate(registry,temp);case 'registration':return await registration(registry);case 'governance-change':return await governanceChange();case 'validate-registry':return validateRegistry(registry);case 'check-registration':return checkRegistration(registry,temp);case 'check-onboarding':return checkOnboarding(registry,temp);case 'check':return await check(registry,temp);case 'check-release':return await checkRelease(registry,temp);case 'backend-preview':return await backendPreview();case 'publish':return await publish(registry,temp);case 'report-stage':return await require('./report.cjs').reportStage(api,{repository:process.env.GITHUB_REPOSITORY,event:read(process.env.GITHUB_EVENT_PATH),needs:JSON.parse(process.env.DOCUMENT_JOB_RESULTS||'{}'),runId:process.env.GITHUB_RUN_ID});default:throw Error('Use candidate, registration, governance-change, validate-registry, check-registration, check --manifest FILE, backend-preview, publish, or report-stage');}}finally{fs.rmSync(temp,{recursive:true,force:true});}
 }
 if(require.main===module)main().catch(e=>{console.error(e.message);process.exitCode=1;});
 module.exports={cloneSources,registrationFromIssue,registration,candidate,writeCandidate,checkRegistration};

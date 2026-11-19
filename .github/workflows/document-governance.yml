@@ -135,14 +135,8 @@ jobs:
       - name: Check immutable manifests and build previews
         id: content
         if: startsWith(github.head_ref, 'document-release/')
-        shell: bash
-        run: |
-          set -euo pipefail
-          manifest=$(node -e 'process.stdout.write(require("./scripts/document-governance/groups.cjs").parseReleaseBranch(process.env.RELEASE_BRANCH).file)')
-          if [ ! -f "$manifest" ]; then echo 'Release manifest is missing'; exit 1; fi
-          node scripts/document-governance/run.cjs check --manifest "$manifest" --output "$RUNNER_TEMP/document-preview"
+        run: node scripts/document-governance/run.cjs check-release --output "$RUNNER_TEMP/document-preview"
         env:
-          RELEASE_BRANCH: ${{ github.head_ref }}
           GH_TOKEN: ${{ github.token }}
           DOCUMENT_GOVERNANCE_MAINTAINERS: ${{ vars.DOCUMENT_GOVERNANCE_MAINTAINERS }}
       - uses: actions/upload-artifact@v4
