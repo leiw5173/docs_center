@@ -245,5 +245,6 @@ function writePreview(result,out) {
   fs.writeFileSync(path.join(out,'index.html'),`<!doctype html><meta charset="utf-8"><title>文档候选预览</title><h1>文档候选预览</h1><p>清单 ${result.digest}</p><p><a href="report.md">检查报告</a> · <a href="report.json">结构化检查结果</a></p>${md.render(markdown)}<ul>${items.join('')}</ul>`);
   fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));
   fs.writeFileSync(path.join(out,'report.md'),markdown);
+  return report;
 }
 module.exports={build,writePreview,validateRegistry,snapshot,analyze,sha,git,compareCandidate};

@@ -39,6 +39,23 @@ function checkReport(result) {
     errors:result.errors,warnings:result.warnings,checks,referenceImpact,versionReview,migrationReferences:result.migrationReferences||[],
     addresses:{added,removed,redirects:result.manifest.redirects||{}}};
 }
+function commentSummary(report) {
+  const categoryByFinding=new Map();
+  for(const check of report.checks) {
+    for(const finding of [...check.errors,...check.warnings]) categoryByFinding.set(finding,check.title);
+  }
+  const summarize=(findings,limit)=>findings.slice(0,limit).map(finding=>{
+    const destination=report.addresses.redirects[finding.file];
+    const message=finding.code==='address-change'&&destination
+      ? `迁移到 ${destination}，测试网部署后检查旧链接跳转。`
+      : finding.message;
+    return {category:categoryByFinding.get(finding),repo:finding.repo?.slice(0,80),file:finding.file?.slice(0,480),
+      line:finding.line,message:message.slice(0,640)};
+  });
+  return {language:report.language,errors:report.errors.length,warnings:report.warnings.length,
+    blockers:summarize(report.errors,12),reminders:summarize(report.warnings,8)};
+}
+
 function reportMarkdown(report) {
   const text=value=>String(value).replace(/[\r\n|]/g,' ').replace(/[<>&`\[\]\\*]/g,c=>`\\${c}`);
   const lines=[`## 文档检查（${report.language}）`,'',
@@ -80,4 +97,4 @@ function migrationMarkdown(result,repository) {
   lines.push('','自动识别只登记可确定的同来源迁移；历史旧地址会继续指向最新地址。请核对表格后确认发布，无需手填文档标识。');
   return lines.join('\n');
 }
-module.exports={checkReport,reportMarkdown,migrationMarkdown};
+module.exports={checkReport,reportMarkdown,migrationMarkdown,commentSummary};
