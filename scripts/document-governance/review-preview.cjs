@@ -52,6 +52,7 @@ function navigationFindings(nodes, prefixes, parent = '') {
 
 const text = value => String(value).replace(/[\r\n<>&\[\]*_`\\]/g,' ').slice(0,450);
 const link = url => url.replace(/[()]/g,c => c === '(' ? '%28' : '%29');
+const comparableAnchor = value => value.replace(/^_(?=\d)/,'').replace(/_/g,'-').toLowerCase();
 const samePreview = (url, site) =>
   url.origin === new URL(site.url).origin && url.searchParams.get('preview') === site.digest;
 
@@ -158,15 +159,15 @@ async function inspectPage(browser, site, candidate, paths) {
       const targetPath = target.searchParams.get('nodepath');
       const language = target.searchParams.get('lang') || site.language;
       if (!targetPath) continue;
-      if (!paths.has(language+':'+targetPath)) {
+      if (!paths.has(language+':'+targetPath) &&
+          !(language === site.language && site.redirects.some(move=>move.sourcePath===targetPath))) {
         failed.push({severity:'error',message:'预览内链指向不存在的文档：'+targetPath+'。',anchor:reference.anchor});
       } else if (targetPath === candidate.sourcePath && language === site.language) {
         const raw = target.searchParams.get('anchor') || target.hash.slice(1);
         let anchor = raw;
         try {anchor = decodeURIComponent(raw);} catch { /* Report the literal invalid anchor. */ }
         if (anchor && !data.headings.includes(anchor)) {
-          const equivalent = value => value.replace(/^_(?=\d)/,'').replace(/_/g,'-').toLowerCase();
-          if (!data.headings.some(heading=>equivalent(heading)===equivalent(anchor))) {
+          if (!data.headings.some(heading=>comparableAnchor(heading)===comparableAnchor(anchor))) {
             failed.push({severity:'error',message:'预览同页链接指向不存在的章节：'+anchor+'。',anchor:reference.anchor});
           }
         }
@@ -176,10 +177,67 @@ async function inspectPage(browser, site, candidate, paths) {
   return failed;
 }
 
+async function inspectRedirect(browser,site,move,anchor) {
+  const page = await browser.newPage();
+  const expected = new URL(move.targetUrl);
+  const old = new URL(move.url);
+  if (anchor) old.searchParams.set('anchor',anchor);
+  const path = [old.href];
+  const record = url => {
+    if (url && url !== 'about:blank' && path.at(-1) !== url) path.push(url);
+  };
+  try {
+    await page.route('**/*', route => {
+      const request = route.request();
+      return ['GET','HEAD'].includes(request.method()) && new URL(request.url()).origin===expected.origin
+        ? route.continue() : route.abort();
+    });
+    page.on('request', request => {
+      if (request.isNavigationRequest() && request.frame()===page.mainFrame()) record(request.url());
+    });
+    page.on('framenavigated', frame => {
+      if (frame===page.mainFrame()) record(frame.url());
+    });
+    const response = await page.goto(old.href,{waitUntil:'domcontentloaded',timeout:25000});
+    if (!response?.ok()) throw Error('打开旧地址返回 HTTP '+(response?.status()||'未知'));
+    await page.waitForURL(url => samePreview(url,site) && url.pathname===expected.pathname &&
+      url.searchParams.get('lang')===site.language && url.searchParams.get('nodepath')===move.targetPath,
+    {timeout:15000});
+    await page.locator('.v-md-editor-preview h1').first().waitFor({timeout:15000});
+    const final = new URL(page.url());
+    if (!samePreview(final,site) || final.pathname!==expected.pathname ||
+        final.searchParams.get('lang')!==site.language || final.searchParams.get('nodepath')!==move.targetPath) {
+      throw Error('正文加载后地址与预期不同');
+    }
+    if (anchor) {
+      const headings=await page.locator('.v-md-editor-preview :is(h1,h2,h3,h4,h5,h6)')
+        .evaluateAll(nodes=>nodes.map(node=>node.getAttribute('data-v-md-heading')||node.id));
+      if (final.searchParams.get('anchor')!==anchor ||
+          !headings.some(heading=>comparableAnchor(heading)===comparableAnchor(anchor))) {
+        throw Error('新页面未保留对应章节 '+anchor);
+      }
+    }
+    return null;
+  } catch (error) {
+    record(page.url());
+    return {sourcePath:move.sourcePath,targetPath:move.targetPath,language:site.language,anchor,path,
+      reason:error.name==='TimeoutError' ? '未能跳到预期地址或加载目标正文' : error.message.split('\n')[0]};
+  } finally { await page.close(); }
+}
+
 async function review(sites, browser) {
   const findings = [];
-  let pageCount = 0;
+  const redirectFailures = [];
+  let pageCount = 0, redirectCount = 0;
   for (const site of sites) {
+    for (const move of site.redirects) for (const anchor of [null,...move.anchors]) {
+      redirectCount++;
+      const failure = await inspectRedirect(browser,site,move,anchor);
+      if (!failure) continue;
+      redirectFailures.push(failure);
+      findings.push({severity:'error',url:failure.path[0],title:move.sourcePath+(anchor?'#'+anchor:''),
+        message:'旧链接跳转失败，预期 '+move.targetPath+'。'+failure.reason+'。'});
+    }
     let tree;
     try { tree = await catalog(site); }
     catch (error) {
@@ -201,7 +259,7 @@ async function review(sites, browser) {
       }
     }
   }
-  return {pageCount,findings};
+  return {pageCount,redirectCount,redirectFailures,findings};
 }
 
 async function main() {
@@ -213,14 +271,17 @@ async function main() {
   finally { await browser.close(); }
   const failures = result.findings.filter(f => f.severity === 'error').length;
   const warnings = result.findings.length - failures;
-  const lines = ['## 已部署预览复检','',`检查 ${result.pageCount} 个变更页面及候选目录，阻断 ${failures} 项，提醒 ${warnings} 项。`,'',
+  const lines = ['## 已部署预览复检','',`检查 ${result.pageCount} 个变更页面、${result.redirectCount} 条旧链接及候选目录，阻断 ${failures} 项，提醒 ${warnings} 项。`,'',
     ...result.findings.slice(0,150).map(f=>`- ${f.severity === 'error' ? '阻断' : '提醒'} · [${text(f.title)}](${link(f.url)}) · ${text(f.message)}`)];
+  for (const failure of result.redirectFailures) {
+    lines.push('', '- 预期目标 '+text(failure.targetPath)+'。实际跳转路径 '+failure.path.map(url=>text(url)).join(' → ')+'。');
+  }
   const file = process.argv[2];
   fs.writeFileSync(file,JSON.stringify(result,null,2));
   fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,lines.join('\n')+'\n');
-  fs.appendFileSync(process.env.GITHUB_OUTPUT,`review_status=${failures?'failed':'passed'}\nreview_summary=${result.pageCount} 个页面，阻断 ${failures} 项，提醒 ${warnings} 项\n`);
+  fs.appendFileSync(process.env.GITHUB_OUTPUT,`review_status=${failures?'failed':'passed'}\nreview_summary=${result.pageCount} 个页面，${result.redirectCount} 条旧链接，阻断 ${failures} 项，提醒 ${warnings} 项\nredirect_failures=${JSON.stringify(result.redirectFailures)}\n`);
   if (failures) process.exitCode = 1;
 }
 
 if (require.main === module) main().catch(error => {console.error(error.message);process.exitCode=1;});
-module.exports = {sectionFindings,navigationFindings,review};
+module.exports = {sectionFindings,navigationFindings,review,inspectRedirect};

@@ -113,6 +113,11 @@ jobs:
       - run: node scripts/document-governance/run.cjs check-registration
   preview:
     name: document-release-checks
+    permissions:
+      contents: read
+      issues: read
+    outputs:
+      translation_review: ${{ steps.content.outputs.translation_review }}
     needs: registration-access
     if: always() && github.event_name == 'pull_request' && github.event.action != 'closed' && (!startsWith(github.head_ref, 'document-registration/') || needs.registration-access.result == 'success')
     runs-on: ubuntu-latest
@@ -128,6 +133,7 @@ jobs:
         if: startsWith(github.head_ref, 'document-registration/')
         run: node scripts/document-governance/run.cjs check-onboarding --output "$RUNNER_TEMP/document-preview"
       - name: Check immutable manifests and build previews
+        id: content
         if: startsWith(github.head_ref, 'document-release/')
         shell: bash
         run: |
@@ -137,6 +143,8 @@ jobs:
           node scripts/document-governance/run.cjs check --manifest "$manifest" --output "$RUNNER_TEMP/document-preview"
         env:
           RELEASE_BRANCH: ${{ github.head_ref }}
+          GH_TOKEN: ${{ github.token }}
+          DOCUMENT_GOVERNANCE_MAINTAINERS: ${{ vars.DOCUMENT_GOVERNANCE_MAINTAINERS }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -150,6 +158,7 @@ jobs:
       preview_sites: ${{ steps.staging.outputs.preview_sites }}
       review_status: ${{ steps.review.outputs.review_status }}
       review_summary: ${{ steps.review.outputs.review_summary }}
+      redirect_failures: ${{ steps.review.outputs.redirect_failures }}
     needs: preview
     if: always() && needs.preview.result == 'success' && github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
@@ -163,10 +172,15 @@ jobs:
         with:
           node-version: '22'
       - run: npm ci --ignore-scripts
+      - uses: actions/download-artifact@v4
+        if: startsWith(github.head_ref, 'document-release/') || startsWith(github.head_ref, 'document-registration/')
+        with:
+          name: document-preview-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/document-check-report
       - name: Request backend staging artifact
         id: staging
         if: startsWith(github.head_ref, 'document-release/') || startsWith(github.head_ref, 'document-registration/')
-        run: node scripts/document-governance/run.cjs backend-preview --output "$RUNNER_TEMP/backend-preview/preview.zip"
+        run: node scripts/document-governance/run.cjs backend-preview --output "$RUNNER_TEMP/backend-preview/preview.zip" --check-report "$RUNNER_TEMP/document-check-report"
         env:
           GH_TOKEN: ${{ github.token }}
           DOCUMENT_PREVIEW_URL: ${{ vars.DOCUMENT_PREVIEW_URL }}
@@ -191,16 +205,25 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged && (startsWith(github.event.pull_request.head.ref, 'document-release/') || startsWith(github.event.pull_request.head.ref, 'document-registration/'))
     runs-on: ubuntu-latest
     environment: document-production
+    permissions:
+      contents: read
+      issues: read
+    outputs:
+      translation_review: ${{ steps.release.outputs.translation_review }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
+          fetch-depth: 2
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - run: npm ci --ignore-scripts
       - run: node scripts/document-governance/run.cjs publish
+        id: release
         env:
+          GH_TOKEN: ${{ github.token }}
+          DOCUMENT_GOVERNANCE_MAINTAINERS: ${{ vars.DOCUMENT_GOVERNANCE_MAINTAINERS }}
           DOCUMENT_PUBLISH_URL: ${{ vars.DOCUMENT_PUBLISH_URL }}
           DOCUMENT_RELEASE_TOKEN: ${{ secrets.DOCUMENT_RELEASE_TOKEN }}
   report:

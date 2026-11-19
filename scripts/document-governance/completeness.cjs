@@ -24,6 +24,33 @@ function isContent(token) {
   return false;
 }
 
+function hasDirectoryIntroduction(body) {
+  const tokens = markdown.parse(body, {});
+  const boilerplate = /^(?:本目录(?:包含|包括|下有)?(?:以下)?(?:内容|文档|链接)|以下(?:是)?(?:本目录的)?(?:文档|内容|链接)|请(?:参考|参阅|查看)(?:以下|下方)(?:文档|内容|链接)|(?:see|refer to) (?:the )?(?:links|documents|pages) below|(?:this directory contains )?(?:the )?following (?:links|documents|pages))$/i;
+  let revisionLevel = 0;
+  for (let index=0;index<tokens.length;index++) {
+    const token = tokens[index];
+    if (token.type === 'heading_open' && token.level===0) {
+      const level = Number(token.tag.slice(1));
+      if (revisionLevel && level<=revisionLevel) revisionLevel = 0;
+      if (!revisionLevel && revisionTitle.test(label(tokens[index+1].content))) revisionLevel = level;
+    }
+    if (revisionLevel || token.type!=='paragraph_open' || token.level!==0) continue;
+    let insideLink = false;
+    const fragments = [];
+    for (const child of tokens[index+1].children) {
+      if (child.type==='link_open') insideLink = true;
+      if (child.type==='link_close') insideLink = false;
+      if (!insideLink && child.type==='text') fragments.push(child.content);
+      if (child.type==='softbreak' || child.type==='hardbreak') fragments.push(' ');
+    }
+    const paragraph = fragments.join('').trim().replace(/[\s:：。.!…-]+$/u,'');
+    if (/[\p{L}]/u.test(paragraph) && !placeholder.test(paragraph) && !boilerplate.test(paragraph) &&
+        !/^sidebar_position:\s*\d+$/.test(paragraph)) return true;
+  }
+  return false;
+}
+
 function completeness(body, firstLine, file) {
   const sections = [], open = [];
   let hasBody = false, hasRevisionSection = false;
@@ -70,4 +97,4 @@ function completeness(body, firstLine, file) {
   return findings;
 }
 
-module.exports = {completeness};
+module.exports = {completeness,hasDirectoryIntroduction};

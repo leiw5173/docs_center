@@ -15,7 +15,7 @@ function fixture(t,files){
 }
 const registration={id:'test',repository:'example/docs-test',prefix:'software/test',rootDep:1,branch:'main',column:'os',languages:['zh','en']};
 const registry={schemaVersion:1,repositories:[registration]};
-const good={'zh/index.md':'---\nsidebar_position: 2\n---\n# 测试目录\n\n[指南](guide.md#安装)\n','zh/guide.md':'# 指南\n\n## 安装\n\n正文。![board](images/board.png)\n','zh/images/board.png':'synthetic image'};
+const good={'zh/index.md':'---\nsidebar_position: 2\n---\n# 测试目录\n\n这里介绍如何安装板卡和检查接线。\n\n[指南](guide.md#安装)\n','zh/guide.md':'# 指南\n\n## 安装\n\n正文。![board](images/board.png)\n','zh/images/board.png':'synthetic image'};
 function run(f,extra={}){return build({registry,roots:{test:f.root},revisions:{test:f.commit},language:'zh',...extra});}
 test('candidate reads exact commit, preserves dirty source, checks resource and reference hashes',t=>{
   const f=fixture(t,good);fs.writeFileSync(path.join(f.root,'zh/guide.md'),'# Dirty unapproved body');
@@ -47,7 +47,7 @@ test('Chinese translation reminders do not require an English release; explicit 
   const r=run(f);assert.equal(r.manifest.scopes.length,1);assert(r.errors.some(e=>e.code==='cross-language'));
 });
 test('release conservatively includes all registered sources and cross-repository references',t=>{
-  const a=fixture(t,{...good,'zh/guide.md':'# Guide\n\n## 安装\n\n[next](https://example.invalid/other.md)'}),b=fixture(t,{'zh/index.md':'# Other'});
+  const a=fixture(t,{...good,'zh/guide.md':'# Guide\n\n## 安装\n\n[next](https://example.invalid/other.md)'}),b=fixture(t,{'zh/index.md':'# Other\n\nThis directory covers hardware setup.'});
   const second={...registration,id:'second',repository:'example/other',prefix:'software/other'};
   const r=build({registry:{schemaVersion:1,repositories:[registration,second]},roots:{test:a.root,second:b.root},revisions:{test:a.commit,second:b.commit},language:'zh',overrides:{references:{'test/zh/guide.md::https://example.invalid/other.md':'second/zh/index.md'}}});
   assert.equal(r.manifest.scopes.length,2);assert.deepEqual(r.errors,[]);assert.deepEqual(r.manifest.scopes[0].documents.find(d=>d.path==='zh/guide.md').references,['second/zh/index.md']);
@@ -93,7 +93,7 @@ test('a bare sidebar position at the start does not count as guide content',t=>{
   assert(errors.some(e=>e.code==='content-incomplete'&&e.line===9));
 });
 test('populated subsections, image-only instructions and directory indexes remain valid',t=>{
-  const f=fixture(t,{...good,'zh/index.md':'# 目录\n',
+  const f=fixture(t,{...good,'zh/index.md':'# 目录\n\n介绍板卡接线和安装时的注意事项。\n',
     'zh/guide.md':'# 指南\n\n## Installation\n\n### 插入板卡\n\n![接线图](images/board.png)\n\n## Optional notes\n\n<!-- only a comment -->\n'});
   const result=run(f);
   assert.deepEqual(result.errors,[]);
@@ -108,11 +108,11 @@ test('Git rename evidence preserves a moved and lightly edited document and miss
   f.git('add','.');f.git('-c','user.name=Test','-c','user.email=test@example.invalid','commit','--quiet','-m','rename');f.commit=f.git('rev-parse','HEAD');
   const result=run(f,{previous});assert.deepEqual(result.errors,[]);assert.equal(result.manifest.redirects['test/zh/guide.md'],'test/zh/renamed.md');
 });
-test('eight-category report keeps blockers, translation reminders, and first-onboarding limits visible',t=>{
+test('release check report keeps blockers, translation reminders, and first-onboarding limits visible',t=>{
   const f=fixture(t,{...good,'zh/guide.md':'# 6.1 Guide\n\n3. 待补充\n\n[坏链接](#不存在)\n','zh/child/page.md':'# Page\n\n正文'});
   const r=run(f),out=path.join(f.root,'report');writePreview(r,out);
   const report=JSON.parse(fs.readFileSync(path.join(out,'report.json')));
-  assert.equal(report.checks.length,8);assert.equal(report.hasBaseline,false);
+  assert.equal(report.checks.length,7);assert.equal(report.hasBaseline,false);
   assert.equal(report.checks.find(c=>c.id==='links').status,'blocked');
   assert.equal(report.checks.find(c=>c.id==='directories').status,'blocked');
   assert.equal(report.checks.find(c=>c.id==='translations').status,'review');
@@ -148,4 +148,48 @@ test('registration issue fields are typed inputs and do not require editing JSON
   const {registrationFromIssue}=require('../../scripts/document-governance/run.cjs');
   const entry=registrationFromIssue('### 登记 ID\n\ntest\n\n### 来源仓库\n\nexample/docs-test\n\n### 分支\n\nmain\n\n### 目标路径前缀\n\nsoftware/test\n\n### 目录层级 rootDep\n\n1\n\n### 目标栏目\n\nos\n\n### 语言\n\nzh, en\n');
   assert.deepEqual(entry,registration);validateRegistry({schemaVersion:1,repositories:[entry]});
+});
+
+test('an existing Markdown link can keep the old file path while the mapped chapter remains valid',t=>{
+  const f=fixture(t,{'zh/index.md':'# Index','zh/old.md':'# Guide\n\n## Install\n\nDo this.',
+    'zh/ref.md':'# Ref\n\n## Setup\n\n[Reference](old.md#install)'});
+  const previous=run(f).manifest;
+  fs.renameSync(path.join(f.root,'zh/old.md'),path.join(f.root,'zh/new.md'));
+  f.git('add','.');f.git('-c','user.name=Test','-c','user.email=test@example.invalid','commit','--quiet','-m','move');
+  f.commit=f.git('rev-parse','HEAD');
+  const result=run(f,{previous});
+  assert.deepEqual(result.errors,[]);
+  assert.deepEqual(result.manifest.scopes[0].documents.find(doc=>doc.path==='zh/ref.md').references,['test/zh/new.md']);
+  assert.deepEqual(result.migrationReferences,[{
+    document:'test/zh/ref.md',target:'test/zh/old.md',anchor:'install',line:5,section:'Setup',sectionAnchor:'setup'
+  }]);
+  fs.writeFileSync(path.join(f.root,'zh/new.md'),'# Guide\n\n## Configure\n\nDo this.');
+  f.git('add','.');f.git('-c','user.name=Test','-c','user.email=test@example.invalid','commit','--quiet','-m','rename section');
+  f.commit=f.git('rev-parse','HEAD');
+  const broken=run(f,{previous,overrides:{redirects:result.manifest.redirects}});
+  assert(broken.warnings.some(error=>error.code==='redirect-anchor'&&error.file==='zh/ref.md'));
+});
+
+test('a directory index needs introductory prose and unchanged link-only indexes remain reviewable',t=>{
+  const file='zh/index.md', links='# 目录\n\n请查看以下文档：\n\n- [安装](guide.md)\n';
+  const f=fixture(t,{...good,[file]:links});
+  const first=run(f);
+  const isIntroduction=finding=>finding.file===file&&finding.code==='directory-introduction';
+  assert(first.errors.some(isIntroduction));
+  const unchanged=run(f,{previous:first.manifest});
+  assert(!unchanged.errors.some(isIntroduction));
+  assert(unchanged.warnings.some(isIntroduction));
+  const {hasDirectoryIntroduction}=require('../../scripts/document-governance/completeness.cjs');
+  assert(!hasDirectoryIntroduction('# Setup\n\n[Installation](guide.md)\n\n<!-- later -->'));
+  assert(!hasDirectoryIntroduction('# Setup\n\n## Revision history\n\nFirst edition'));
+  assert(!hasDirectoryIntroduction('# Setup\n\nTODO'));
+  assert(hasDirectoryIntroduction('# Setup\n\nUse these guides to install the board, connect a display, and verify its first boot.'));
+});
+
+test('directory shorthand in an index resolves to its nested index',t=>{
+ const files={'zh/index.md':'# Root\n\nThis directory covers setup.\n\n[Guides](guides/)',
+  'zh/guides/index.md':'# Guides\n\nUse these guides to set up the machine.'};
+ const result=run(fixture(t,files));
+ assert.deepEqual(result.errors,[]);
+ assert.deepEqual(result.manifest.scopes[0].documents.find(doc=>doc.path==='zh/index.md').references,['test/zh/guides/index.md']);
 });
