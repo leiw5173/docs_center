@@ -14,37 +14,37 @@
         "教学与实践"
       ],
       "language": "zh",
-      "commit": "0e6b0e56f0054cf56a4c5a49dc1ff489550a93af",
+      "commit": "7e3bc2ab5db5d39216651c2707a967a04faeb528",
       "documents": [
         {
-          "path": "zh/guide/index.md",
+          "path": "zh/index.md",
+          "sha256": "2f332f08316e50ba573433b77f7ab795b6a912084f17972f215b30e2de9679a0",
+          "title": "维护流程测试文档",
+          "sidebarPosition": 1,
+          "softwareVersion": null,
+          "references": [
+            "maintenance-test/zh/maintenance-guide/index.md"
+          ]
+        },
+        {
+          "path": "zh/maintenance-guide/index.md",
           "sha256": "bbf631b9fb35e67f6be456c36da98401b4ecf1ad3890f6feb010a8ff4ea67de7",
           "title": "测试指南",
           "sidebarPosition": 1,
           "softwareVersion": null,
           "references": [
-            "maintenance-test/zh/guide/steps.md",
-            "maintenance-test/zh/index.md"
+            "maintenance-test/zh/index.md",
+            "maintenance-test/zh/maintenance-guide/steps.md"
           ]
         },
         {
-          "path": "zh/guide/steps.md",
+          "path": "zh/maintenance-guide/steps.md",
           "sha256": "fdfde0f3d6c42cfadd80c50d305ceb3809c45f8c0a9b8ccf510e4cfc77125035",
           "title": "维护流程测试步骤",
           "sidebarPosition": 2,
           "softwareVersion": "test-1.0",
           "references": [
-            "maintenance-test/zh/guide/index.md"
-          ]
-        },
-        {
-          "path": "zh/index.md",
-          "sha256": "02cdc385b6ae1901cfb114565e61a1bb1f51bc8e57a7fd41521fe0a839573d4b",
-          "title": "维护流程测试文档",
-          "sidebarPosition": 1,
-          "softwareVersion": null,
-          "references": [
-            "maintenance-test/zh/guide/index.md"
+            "maintenance-test/zh/maintenance-guide/index.md"
           ]
         }
       ],
@@ -57,7 +57,10 @@
     }
   ],
   "references": {},
-  "redirects": {},
+  "redirects": {
+    "maintenance-test/zh/guide/index.md": "maintenance-test/zh/maintenance-guide/index.md",
+    "maintenance-test/zh/guide/steps.md": "maintenance-test/zh/maintenance-guide/steps.md"
+  },
   "labels": {},
   "feedback": [],
   "reviewRequired": [
@@ -68,7 +71,20 @@
     "directory-order",
     "address-migration"
   ],
-  "warnings": [],
+  "warnings": [
+    {
+      "repo": "maintenance-test",
+      "file": "maintenance-test/zh/guide/index.md",
+      "code": "address-change",
+      "message": "Removed document: review redirects, references and archive"
+    },
+    {
+      "repo": "maintenance-test",
+      "file": "maintenance-test/zh/guide/steps.md",
+      "code": "address-change",
+      "message": "Removed document: review redirects, references and archive"
+    }
+  ],
   "groupId": "g-f3ab12cbbdd16d6d6ea6",
   "groupRepositories": [
     "maintenance-test"

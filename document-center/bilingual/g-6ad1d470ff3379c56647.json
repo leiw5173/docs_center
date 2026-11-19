@@ -1,0 +1,190 @@
+{
+  "schemaVersion": 1,
+  "bundleId": "g-6ad1d470ff3379c56647",
+  "releases": [
+    {
+      "schemaVersion": 1,
+      "language": "en",
+      "scopes": [
+        {
+          "repoId": "maintenance-test",
+          "repository": "leiw5173/docs_test",
+          "prefix": "maintenance-test",
+          "rootDep": 1,
+          "column": "cases",
+          "parentNavigationId": "cases/cases-teaching-practice",
+          "navigationPath": [
+            "应用案例",
+            "教学与实践"
+          ],
+          "language": "en",
+          "commit": "7e3bc2ab5db5d39216651c2707a967a04faeb528",
+          "documents": [
+            {
+              "path": "en/index.md",
+              "sha256": "8d2af38360c5bac8a5534277885dc5751dd23d829c54bea6f5d1f5df50f28fb5",
+              "title": "Onboarding workflow test",
+              "sidebarPosition": 1,
+              "softwareVersion": null,
+              "references": [
+                "maintenance-test/en/maintenance-guide/index.md"
+              ]
+            },
+            {
+              "path": "en/maintenance-guide/index.md",
+              "sha256": "8cc89b961fce499991b1a22dec7eb245a9c5274e7d979e127c4d8737c31ff707",
+              "title": "Test guide",
+              "sidebarPosition": 1,
+              "softwareVersion": null,
+              "references": [
+                "maintenance-test/en/index.md",
+                "maintenance-test/en/maintenance-guide/steps.md"
+              ]
+            },
+            {
+              "path": "en/maintenance-guide/steps.md",
+              "sha256": "3edd02678b8f354230b3797f2be7a5e0b06c2ca4cb805142ae6892cbb94db68e",
+              "title": "Onboarding test steps",
+              "sidebarPosition": 2,
+              "softwareVersion": "test-1.0",
+              "references": [
+                "maintenance-test/en/maintenance-guide/index.md"
+              ]
+            }
+          ],
+          "assets": [
+            {
+              "path": "en/images/flow.svg",
+              "sha256": "b50e8b3b1ce1241ba0dbb1082f9b84ba251acb87bbe25e81b26b3eeebc03d86a"
+            }
+          ]
+        }
+      ],
+      "references": {},
+      "redirects": {
+        "maintenance-test/en/guide/index.md": "maintenance-test/en/maintenance-guide/index.md",
+        "maintenance-test/en/guide/steps.md": "maintenance-test/en/maintenance-guide/steps.md"
+      },
+      "labels": {},
+      "feedback": [],
+      "reviewRequired": [
+        "content-completeness",
+        "references",
+        "version-archive",
+        "translations",
+        "directory-order",
+        "address-migration"
+      ],
+      "warnings": [
+        {
+          "repo": "maintenance-test",
+          "file": "maintenance-test/en/guide/index.md",
+          "code": "address-change",
+          "message": "Removed document: review redirects, references and archive"
+        },
+        {
+          "repo": "maintenance-test",
+          "file": "maintenance-test/en/guide/steps.md",
+          "code": "address-change",
+          "message": "Removed document: review redirects, references and archive"
+        }
+      ],
+      "groupId": "g-f3ab12cbbdd16d6d6ea6",
+      "groupRepositories": [
+        "maintenance-test"
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "language": "zh",
+      "scopes": [
+        {
+          "repoId": "maintenance-test",
+          "repository": "leiw5173/docs_test",
+          "prefix": "maintenance-test",
+          "rootDep": 1,
+          "column": "cases",
+          "parentNavigationId": "cases/cases-teaching-practice",
+          "navigationPath": [
+            "应用案例",
+            "教学与实践"
+          ],
+          "language": "zh",
+          "commit": "7e3bc2ab5db5d39216651c2707a967a04faeb528",
+          "documents": [
+            {
+              "path": "zh/index.md",
+              "sha256": "2f332f08316e50ba573433b77f7ab795b6a912084f17972f215b30e2de9679a0",
+              "title": "维护流程测试文档",
+              "sidebarPosition": 1,
+              "softwareVersion": null,
+              "references": [
+                "maintenance-test/zh/maintenance-guide/index.md"
+              ]
+            },
+            {
+              "path": "zh/maintenance-guide/index.md",
+              "sha256": "bbf631b9fb35e67f6be456c36da98401b4ecf1ad3890f6feb010a8ff4ea67de7",
+              "title": "测试指南",
+              "sidebarPosition": 1,
+              "softwareVersion": null,
+              "references": [
+                "maintenance-test/zh/index.md",
+                "maintenance-test/zh/maintenance-guide/steps.md"
+              ]
+            },
+            {
+              "path": "zh/maintenance-guide/steps.md",
+              "sha256": "fdfde0f3d6c42cfadd80c50d305ceb3809c45f8c0a9b8ccf510e4cfc77125035",
+              "title": "维护流程测试步骤",
+              "sidebarPosition": 2,
+              "softwareVersion": "test-1.0",
+              "references": [
+                "maintenance-test/zh/maintenance-guide/index.md"
+              ]
+            }
+          ],
+          "assets": [
+            {
+              "path": "zh/images/flow.svg",
+              "sha256": "b50e8b3b1ce1241ba0dbb1082f9b84ba251acb87bbe25e81b26b3eeebc03d86a"
+            }
+          ]
+        }
+      ],
+      "references": {},
+      "redirects": {
+        "maintenance-test/zh/guide/index.md": "maintenance-test/zh/maintenance-guide/index.md",
+        "maintenance-test/zh/guide/steps.md": "maintenance-test/zh/maintenance-guide/steps.md"
+      },
+      "labels": {},
+      "feedback": [],
+      "reviewRequired": [
+        "content-completeness",
+        "references",
+        "version-archive",
+        "translations",
+        "directory-order",
+        "address-migration"
+      ],
+      "warnings": [
+        {
+          "repo": "maintenance-test",
+          "file": "maintenance-test/zh/guide/index.md",
+          "code": "address-change",
+          "message": "Removed document: review redirects, references and archive"
+        },
+        {
+          "repo": "maintenance-test",
+          "file": "maintenance-test/zh/guide/steps.md",
+          "code": "address-change",
+          "message": "Removed document: review redirects, references and archive"
+        }
+      ],
+      "groupId": "g-f3ab12cbbdd16d6d6ea6",
+      "groupRepositories": [
+        "maintenance-test"
+      ]
+    }
+  ]
+}
