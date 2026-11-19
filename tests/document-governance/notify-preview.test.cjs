@@ -49,7 +49,8 @@ test('bilingual preview notifications deep-link each review target within the sa
   const reviewUrl='https://preview.example/document-previews/digest/review/revision';
   const site=(language,title)=>({
     language,reviewUrl,url:`https://preview.example/${language}`,
-    pages:[{title,change:'moved',path:`${language}/long/path/steps.md`,url:`https://preview.example/${language}/steps`}],
+    pages:[{title,change:'moved',sourcePath:'maintenance-test/maintenance-guide/steps.md',
+      path:`${language}/long/path/steps.md`,url:`https://preview.example/${language}/steps`}],
     redirects:[{sourcePath:'maintenance-test/guide/steps.md',targetPath:'maintenance-test/maintenance-guide/steps.md',
       url:`https://preview.example/${language}/old`,targetUrl:`https://preview.example/${language}/steps`,
       references:[{direct:false,title:'引用文档',url:`https://preview.example/${language}/reference`}]}]
@@ -63,10 +64,10 @@ test('bilingual preview notifications deep-link each review target within the sa
   const english=links.find(item=>item.text==='Steps'),chinese=links.find(item=>item.text==='维护步骤');
   assert.notEqual(english.href,chinese.href);
   const rows=message.paragraphs.map(row=>row.map(item=>item.text).join(''));
-  assert(rows.some(row=>row.includes('中文 · 迁移 · 维护步骤')));
-  assert(rows.some(row=>row.includes('英文 · 迁移 · Steps')));
+  assert(rows.some(row=>row.includes('中文 · 目录路径变更 · 维护步骤')));
+  assert(rows.some(row=>row.includes('英文 · 目录路径变更 · Steps')));
   assert(rows.some(row=>row.includes('zh/long/path/steps.md')));
-  assert(rows.some(row=>row.includes('旧址 maintenance-test/guide/steps.md')));
-  assert(rows.some(row=>row.includes('新址 maintenance-test/maintenance-guide/steps.md')));
-  assert(rows.some(row=>row.includes('间接引用 · 引用文档')));
+  assert(rows.some(row=>row.includes('变更前路径 · maintenance-test/guide/steps.md')));
+  assert(rows.some(row=>row.includes('变更后路径 · maintenance-test/maintenance-guide/steps.md')));
+  assert(rows.some(row=>row.includes('受影响的间接引用 · 引用文档')));
 });

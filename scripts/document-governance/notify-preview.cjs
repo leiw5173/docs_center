@@ -39,7 +39,7 @@ function previewMessage({repository, number, revision, runId, deployment, review
       ...(index?[text(' · ')]:[]),reviewLink(language(site)+'目录',reviewUrl,site.url)
     ]));
   }
-  const changes = {added:'新增',modified:'修改',moved:'迁移'};
+  const changes = {added:'新增文档',modified:'修改文档',moved:'目录路径变更'};
   const pages = sites.flatMap(site=>site.pages?.map(page=>({site,page}))||[]);
   if(pages.length) section(text(`【变更页面 · ${pages.length}】`));
   for(const {site,page} of pages) {
@@ -48,13 +48,15 @@ function previewMessage({repository, number, revision, runId, deployment, review
     paragraphs.push([text('　'+page.path)]);
   }
   const redirects = sites.flatMap(site=>site.redirects?.map(move=>({site,move}))||[]);
-  if(redirects.length) section(text(`【旧链接跳转 · ${redirects.length}】`));
+  if(redirects.length) section(text(`【目录路径变更明细 · ${redirects.length}】`));
   for(const {site,move} of redirects) {
-    paragraphs.push([text(`• ${language(site)} · 旧址 `),reviewLink(move.sourcePath,reviewUrl,move.url)]);
-    paragraphs.push([text('　新址 '),reviewLink(move.targetPath,reviewUrl,move.targetUrl)]);
+    const page = site.pages?.find(page=>page.sourcePath===move.targetPath);
+    paragraphs.push([text(`• ${[language(site),page?.title].filter(Boolean).join(' · ')}`)]);
+    paragraphs.push([text('　变更前路径 · '),reviewLink(move.sourcePath,reviewUrl,move.url)]);
+    paragraphs.push([text('　变更后路径 · '),reviewLink(move.targetPath,reviewUrl,move.targetUrl)]);
     for(const ref of move.references) {
       const location = [ref.title,ref.section,ref.line?`第 ${ref.line} 行`:null].filter(Boolean).join(' · ');
-      paragraphs.push([text(`　${ref.direct?'直接引用':'间接引用'} · `),reviewLink(location,reviewUrl,ref.url)]);
+      paragraphs.push([text(`　受影响的${ref.direct?'直接引用':'间接引用'} · `),reviewLink(location,reviewUrl,ref.url)]);
     }
   }
   if(review?.findings.length) section(text('【复检发现】'));
