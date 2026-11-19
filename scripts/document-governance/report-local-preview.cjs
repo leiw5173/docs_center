@@ -30,9 +30,6 @@ async function main() {
   }
   const sites = previewSites(locations);
   if (sites.some(site=>new URL(site.url).origin!==localBrowserOrigin)) throw Error('本地回报只接受本机地址');
-  if (!sites[0].reviewUrl || !new URL(sites[0].reviewUrl).pathname.endsWith('/'+revision)) {
-    throw Error('统一预览链接与候选修订不一致');
-  }
   if (!Number.isSafeInteger(review?.pageCount) || review.pageCount<0 ||
       !Number.isSafeInteger(review?.redirectCount) || review.redirectCount<0 ||
       !Array.isArray(review?.findings) || !Array.isArray(review?.redirectFailures) ||

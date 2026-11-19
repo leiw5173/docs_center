@@ -544,25 +544,9 @@ async function backendPreview() {
     }
     sites.push({...site,pages:pages.filter(page=>visible.has(page.sourcePath))});
   }
-  if (sites.length) {
-    const ordered = [...sites].sort((a,b)=>b.language.localeCompare(a.language));
-    const response = await fetch(url,{method:'POST',redirect:'error',
-      headers:{'Content-Type':'application/json','X-Document-Preview-Token':token},
-      body:JSON.stringify({review:{revision:pr.head.sha,sites:ordered}}),signal:AbortSignal.timeout(30000)});
-    if (!response.ok || !response.headers.get('content-type')?.includes('text/plain')) {
-      throw Error(`Unified preview could not be created: HTTP ${response.status}`);
-    }
-    const expectedPath = `/document-previews/${ordered[0].digest}/review/${pr.head.sha}`;
-    const returned = new URL(await response.text());
-    if (returned.pathname!==expectedPath) throw Error('Unified preview does not match its candidate');
-    const reviewUrl = new URL(expectedPath,sites[0].url).href;
-    const page = await fetch(reviewUrl,{redirect:'error',signal:AbortSignal.timeout(30000)});
-    if (!page.ok || !page.headers.get('content-type')?.includes('text/html')) throw Error('Unified preview is unavailable');
-    for (const site of sites) site.reviewUrl = reviewUrl;
-    previews.previewSites(sites);
-    const siteFile=argument('--sites-file');
-    if (siteFile) fs.writeFileSync(siteFile,JSON.stringify(sites),{mode:0o600});
-  }
+  previews.previewSites(sites);
+  const siteFile=argument('--sites-file');
+  if (siteFile) fs.writeFileSync(siteFile,JSON.stringify(sites),{mode:0o600});
   if(process.env.GITHUB_OUTPUT)fs.appendFileSync(process.env.GITHUB_OUTPUT,'preview_ready=true\n');
   console.log(`Backend preview created for PR head ${pr.head.sha}`);
 }
