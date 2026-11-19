@@ -38,7 +38,8 @@ function contentReviewMarkdown(needs) {
       if(!items.length)continue;
       lines.push('');
       for(const finding of items) {
-        const location=[finding.repo,finding.file].filter(Boolean).join(' / ')+
+        const file=finding.file?.startsWith(finding.repo+'/')?finding.file:[finding.repo,finding.file].filter(Boolean).join(' / ');
+        const location=file+
           (Number.isSafeInteger(finding.line)?`（第 ${finding.line} 行）`:'');
         lines.push('- '+[label,finding.category,location, finding.message].filter(Boolean).map(text).join(' · '));
       }

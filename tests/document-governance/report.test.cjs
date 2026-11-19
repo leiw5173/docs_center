@@ -96,5 +96,6 @@ test('a failed bilingual PR comment shows both language results and explains why
   assert.match(comment,/目录介绍 · test \/ en\/maintenance-guide\/index.md（第 5 行） · 请在 index.md 写一段目录介绍/);
   assert.match(comment,/中文 · 通过.*阻断 0 项，提醒 1 项/);
   assert.match(comment,/迁移到 test\/zh\/new.md/);
+  assert.doesNotMatch(comment,/test \/ test\//);
   assert.match(comment,/测试网预览和浏览器复检未运行/);
 });
