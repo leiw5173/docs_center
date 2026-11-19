@@ -185,3 +185,11 @@ test('a directory index needs introductory prose and unchanged link-only indexes
   assert(!hasDirectoryIntroduction('# Setup\n\nTODO'));
   assert(hasDirectoryIntroduction('# Setup\n\nUse these guides to install the board, connect a display, and verify its first boot.'));
 });
+
+test('directory shorthand in an index resolves to its nested index',t=>{
+ const files={'zh/index.md':'# Root\n\nThis directory covers setup.\n\n[Guides](guides/)',
+  'zh/guides/index.md':'# Guides\n\nUse these guides to set up the machine.'};
+ const result=run(fixture(t,files));
+ assert.deepEqual(result.errors,[]);
+ assert.deepEqual(result.manifest.scopes[0].documents.find(doc=>doc.path==='zh/index.md').references,['test/zh/guides/index.md']);
+});

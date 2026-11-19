@@ -46,3 +46,13 @@ test('a migration links current and previous reference documents, with exact sec
  assert.equal(new URL(move.targetUrl).searchParams.get('nodepath'),'a/new.md');
  assert.doesNotThrow(()=>previewSites([{language:'zh',digest,url,pages:[],redirects:[move]}]));
 });
+
+test('candidate preview links only documents reachable through index declarations',()=>{
+ const root=doc('zh/index.md','old'), guides={...doc('zh/guides/index.md'),references:['a/zh/guides/install.md']};
+ const guide={...doc('zh/guides/install.md'),references:['a/zh/draft.md']}, draft=doc('zh/draft.md');
+ const previous={scopes:[scope('a',[root,guides,guide,draft])]};
+ const declared={...root,sha256:'new',references:['a/zh/guides/index.md']};
+ const manifest={language:'zh',scopes:[scope('a',[declared,guides,guide,{...draft,sha256:'changed'}])]};
+ assert.deepEqual(changedPages(manifest,previous,url,{declaredOnly:true}).map(page=>[page.path,page.change]),
+  [['zh/guides/install.md','added']]);
+});

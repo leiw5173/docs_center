@@ -359,14 +359,27 @@ async function backendPreview() {
     const report=reportDirectory ? read(path.join(reportDirectory,...(onboarding?[manifest.language]:[]),'report.json')) : null;
     if(report && (report.language!==manifest.language || !Array.isArray(report.migrationReferences))) throw Error('Invalid candidate migration report');
     const redirects=previews.migrationPreviews(manifest,previous,siteUrl,report?.migrationReferences);
-    const pages=previews.changedPages(manifest,previous,siteUrl);
+    const pages=previews.changedPages(manifest,previous,siteUrl,{declaredOnly:true});
     const site={language:manifest.language,digest,url:siteUrl,pages,redirects};previews.previewSites([site]);
     const deployed=await fetch(siteUrl,{redirect:'error',signal:AbortSignal.timeout(30000)});
     if(!deployed.ok||!deployed.headers.get('content-type')?.includes('text/html')||!(await deployed.text()).includes('id="app"'))throw Error('Deployed preview is not the document center application');
     const contextUrl=new URL(`/document-previews/${digest}/api/document/preview-context`,siteUrl);
     const contextResponse=await fetch(contextUrl,{signal:AbortSignal.timeout(30000)}),context=contextResponse.ok?await contextResponse.json():null;
     if(context?.data?.digest!==digest||manifest.scopes.some(scope=>!context.data.scopes.some(s=>s.repoId===scope.repoId&&s.commit===scope.commit&&s.language===scope.language)))throw Error('Document center is not deployed with the reviewed source revisions');
-    sites.push(site);
+    const treeUrl=new URL(`/document-previews/${digest}/api/document/get-doc-tree`,siteUrl);
+    treeUrl.searchParams.set('language',manifest.language);
+    const treeResponse=await fetch(treeUrl,{redirect:'error',signal:AbortSignal.timeout(30000)});
+    const tree=treeResponse.ok?(await treeResponse.json()).data:null;
+    if(!Array.isArray(tree)) throw Error('Candidate document catalog is unavailable');
+    const visible=new Set();
+    const visit=nodes=>{for(const node of nodes){if(!node.isDirectory)visible.add(node.path);visit(node.children||[]);}};
+    visit(tree);
+    for(const scope of manifest.scopes) {
+      const declared=previews.declaredDocuments(scope,manifest.language);
+      const mismatches=scope.documents.filter(doc=>!declared.has(doc.path)&&visible.has(scope.prefix+'/'+doc.path.split('/').slice(1).join('/')));
+      if(mismatches.length) throw Error('预览目录与 index.md 声明不一致：'+mismatches.slice(0,12).map(doc=>scope.repoId+'/'+doc.path).join('、'));
+    }
+    sites.push({...site,pages:pages.filter(page=>visible.has(page.sourcePath))});
   }
   if(process.env.GITHUB_OUTPUT)fs.appendFileSync(process.env.GITHUB_OUTPUT,`preview_sites=${JSON.stringify(sites)}\n`);
   console.log(`Backend preview created for PR head ${pr.head.sha}`);

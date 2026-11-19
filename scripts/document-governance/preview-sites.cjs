@@ -1,20 +1,37 @@
 const directoryMetadata=path=>/(?:^|\/)(?:index|readme)\.md$/i.test(path);
-function changedPages(manifest,previous,siteUrl) {
+function declaredDocuments(scope,language) {
+  const prefix=scope.repoId+'/';
+  const docs=new Map(scope.documents.map(doc=>[prefix+doc.path,doc]));
+  const queue=[prefix+language+'/index.md'], declared=new Set();
+  for(let index=0;index<queue.length;index++) {
+    const id=queue[index], doc=docs.get(id);
+    if(!doc||declared.has(doc.path)) continue;
+    declared.add(doc.path);
+    if(doc.path.endsWith('/index.md')) queue.push(...doc.references||[]);
+  }
+  return declared;
+}
+function changedPages(manifest,previous,siteUrl,{declaredOnly=false}={}) {
   const before=new Map((previous?.scopes||[]).map(scope=>[scope.repoId,scope]));
   const oldDocs=new Map((previous?.scopes||[]).flatMap(scope=>scope.documents.map(doc=>[scope.repoId+'/'+doc.path,doc])));
   const moved=new Set(Object.entries(manifest.redirects||{}).filter(([from,to])=>previous?.redirects?.[from]!==to).map(([,to])=>to));
   const placement=scope=>scope&&JSON.stringify([scope.prefix,scope.rootDep,scope.column,scope.parentNavigationId,scope.navigationPath]);
   const content=doc=>doc&&JSON.stringify([doc.sha256,doc.title,doc.sidebarPosition,doc.softwareVersion,doc.references]);
   const pages=[];
-  for(const scope of manifest.scopes)for(const doc of scope.documents) {
-    if(directoryMetadata(doc.path))continue;
-    const id=scope.repoId+'/'+doc.path,old=oldDocs.get(id);
-    const labelsChanged=JSON.stringify(previous?.labels?.[id]||[])!==JSON.stringify(manifest.labels?.[id]||[]);
-    const feedbackChanged=JSON.stringify((previous?.feedback||[]).filter(f=>f.document===id))!==JSON.stringify((manifest.feedback||[]).filter(f=>f.document===id));
-    if(old&&content(old)===content(doc)&&placement(before.get(scope.repoId))===placement(scope)&&!labelsChanged&&!feedbackChanged&&!moved.has(id))continue;
-    const sourcePath=scope.prefix+'/'+doc.path.split('/').slice(1).join('/'),url=new URL('/community/document/info',siteUrl);
-    url.search=new URLSearchParams({preview:new URL(siteUrl).searchParams.get('preview'),lang:manifest.language,nodepath:sourcePath});
-    pages.push({title:doc.title||doc.path,path:doc.path,sourcePath,change:moved.has(id)?'moved':old?'modified':'added',url:url.href});
+  for(const scope of manifest.scopes) {
+    const declared=declaredOnly?declaredDocuments(scope,manifest.language):null;
+    const previousScope=before.get(scope.repoId);
+    const previouslyDeclared=declaredOnly&&previousScope?declaredDocuments(previousScope,manifest.language):null;
+    for(const doc of scope.documents) {
+      if(directoryMetadata(doc.path)||(declared&&!declared.has(doc.path)))continue;
+      const id=scope.repoId+'/'+doc.path,old=previouslyDeclared&&!previouslyDeclared.has(doc.path)?null:oldDocs.get(id);
+      const labelsChanged=JSON.stringify(previous?.labels?.[id]||[])!==JSON.stringify(manifest.labels?.[id]||[]);
+      const feedbackChanged=JSON.stringify((previous?.feedback||[]).filter(f=>f.document===id))!==JSON.stringify((manifest.feedback||[]).filter(f=>f.document===id));
+      if(old&&content(old)===content(doc)&&placement(previousScope)===placement(scope)&&!labelsChanged&&!feedbackChanged&&!moved.has(id))continue;
+      const sourcePath=scope.prefix+'/'+doc.path.split('/').slice(1).join('/'),url=new URL('/community/document/info',siteUrl);
+      url.search=new URLSearchParams({preview:new URL(siteUrl).searchParams.get('preview'),lang:manifest.language,nodepath:sourcePath});
+      pages.push({title:doc.title||doc.path,path:doc.path,sourcePath,change:moved.has(id)?'moved':old?'modified':'added',url:url.href});
+    }
   }
   return pages;
 }
@@ -101,4 +118,4 @@ function previewSites(value) {
   }
   return sites;
 }
-module.exports={previewSites,changedPages,directoryMetadata,migrationPreviews};
+module.exports={previewSites,changedPages,directoryMetadata,migrationPreviews,declaredDocuments};

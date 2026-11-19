@@ -164,6 +164,10 @@ function build({registry,roots,revisions,language,previous=null,overrides={}}) {
           }
           const target=localTarget(file,link.href);
           if(!target){if(link.image)report(errors,'external-resource','External images must be moved into the pinned business source');else if(/^https?:/i.test(link.href)){if(/\.md(?:[?#]|$)|\/community\/document\//i.test(link.href))report(errors,'reference-registration',`Register document reference: ${link.href}`);else report(warnings,'external-link',`Review external link: ${link.href}`);}continue;}
+          if(!link.image&&!source.has(target.path)&&!target.path.endsWith('.md')) {
+            const directoryIndex=target.path.replace(/\/$/,'')+'/index.md';
+            if(source.has(directoryIndex)) target.path=directoryIndex;
+          }
           if(!source.has(target.path)) {
             if(!link.image&&target.path.endsWith('.md')) {
               pendingReferences.push({repo:r.id,file,target:r.id+'/'+target.path,anchor:target.anchor,line:link.line});
@@ -220,6 +224,10 @@ function writePreview(result,out) {
       const registered=(result.manifest.references||{})[`${key}::${href}`];
       if(registered){t.attrSet('href',path.posix.relative(path.posix.dirname(`${key}.html`),`${result.manifest.redirects[registered]||registered}.html`));continue;}
       const attr=t.type==='image'?'src':'href';let target;try{target=localTarget(p.file,t.attrGet(attr));}catch{continue;}if(!target)continue;
+      if(t.type==='link_open'&&!p.source.has(target.path)&&!target.path.endsWith('.md')) {
+        const directoryIndex=target.path.replace(/\/$/,'')+'/index.md';
+        if(p.source.has(directoryIndex)) target.path=directoryIndex;
+      }
       if(target.path.endsWith('.md'))t.attrSet(attr,path.posix.relative(path.posix.dirname(`${key}.html`),`${result.manifest.redirects[p.repo.id+'/'+target.path]||p.repo.id+'/'+target.path}.html`)+(target.anchor?`#${encodeURIComponent(target.anchor)}`:''));
       else {
         const asset=path.posix.join(p.repo.id,target.path), dest=path.join(out,asset);fs.mkdirSync(path.dirname(dest),{recursive:true});fs.writeFileSync(dest,p.source.get(target.path)?.read()||'');
