@@ -49,13 +49,20 @@ test('bilingual preview notifications include a single shared review link',()=>{
   const reviewUrl='https://preview.example/document-previews/digest/review/revision';
   const site=(language,title)=>({
     language,reviewUrl,url:`https://preview.example/${language}`,
-    pages:[{title,path:`${language}/long/path/steps.md`,url:`https://preview.example/${language}/steps`}],
+    pages:[{title,change:'moved',path:`${language}/long/path/steps.md`,url:`https://preview.example/${language}/steps`}],
     redirects:[{sourcePath:'maintenance-test/guide/steps.md',targetPath:'maintenance-test/maintenance-guide/steps.md',
       url:`https://preview.example/${language}/old`,targetUrl:`https://preview.example/${language}/steps`,
       references:[{direct:false,title:'引用文档',url:`https://preview.example/${language}/reference`}]}]
   });
   const message=previewMessage({...options,sites:[site('en','Steps'),site('zh','维护步骤')],
     review:{pageCount:2,redirectCount:2,findings:[],redirectFailures:[]}});
-  const links=message.paragraphs.flat().filter(item=>item.href?.startsWith('https://preview.example'));
+  const items=message.paragraphs.flat();
+  const links=items.filter(item=>item.href?.startsWith('https://preview.example'));
   assert.deepEqual(links,[{tag:'a',text:'查看全部变更',href:reviewUrl}]);
+  assert(items.some(item=>item.text.includes('中文 · 迁移 · 维护步骤')));
+  assert(items.some(item=>item.text.includes('英文 · 迁移 · Steps')));
+  assert(items.some(item=>item.text.includes('zh/long/path/steps.md')));
+  assert(items.some(item=>item.text.includes('旧址 maintenance-test/guide/steps.md')));
+  assert(items.some(item=>item.text.includes('新址 maintenance-test/maintenance-guide/steps.md')));
+  assert(items.some(item=>item.text.includes('间接引用 · 引用文档')));
 });

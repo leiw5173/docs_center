@@ -1,5 +1,6 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');
 const {stageStatus,reportStage}=require('../../scripts/document-governance/report.cjs');
+const {commentDeployment}=require('../../scripts/document-governance/report-local-preview.cjs');
 const sha='a'.repeat(40);
 const digest='b'.repeat(64);
 const sites=JSON.stringify([{language:'zh',digest,url:`https://preview.example/community/document?preview=${digest}&lang=zh`,pages:[{title:'新页面',path:'zh/new.md',sourcePath:'a/new.md',change:'moved',url:`https://preview.example/community/document/info?preview=${digest}&lang=zh&nodepath=a%2Fnew.md`}],redirects:[{from:'a/zh/old.md',to:'a/zh/new.md',sourcePath:'a/old.md',targetPath:'a/new.md',anchors:[],targetUrl:`https://preview.example/community/document/info?preview=${digest}&lang=zh&nodepath=a%2Fnew.md`,references:[{id:'a/zh/ref.md',title:'引用指南',direct:true,line:9,section:'安装',url:`https://preview.example/community/document/info?preview=${digest}&lang=zh&nodepath=a%2Fref.md&anchor=install`}],url:`https://preview.example/community/document/info?preview=${digest}&lang=zh&nodepath=a%2Fold.md`}]}]);
@@ -24,6 +25,24 @@ test('retries update one status comment and stale heads do not mutate the PR',as
   assert(comment.body.includes('已部署完成，请审查。'));
   assert(!comment.body.includes('preview.example'));
   current='b'.repeat(40);await reportStage(api,input);assert.equal(writes.length,2);
+});
+test('local success comments are deduplicated and omit the local preview address',async()=>{
+  const comments=[];
+  let current=sha;
+  const api=async(resource,data)=>{
+    if (resource==='pulls/7') return {state:'open',head:{sha:current}};
+    if (!data) return comments;
+    comments.push({id:9,user:{login:'github-actions[bot]'},body:data.body});
+  };
+  await commentDeployment(api,7,sha);
+  await commentDeployment(api,7,sha);
+  assert.equal(comments.length,1);
+  assert.match(comments[0].body,/已部署完成，请审查。/);
+  assert.match(comments[0].body,/候选修订 `a{12}`/);
+  assert.doesNotMatch(comments[0].body,/https?:|127\.0\.0\.1/);
+  current='b'.repeat(40);
+  await assert.rejects(commentDeployment(api,7,'c'.repeat(40)),/候选 PR 已变化/);
+  assert.equal(comments.length,1);
 });
 test('deployed links must be HTTPS, bound to the candidate digest, and share the site origin',()=>{
   const {previewSites}=require('../../scripts/document-governance/preview-sites.cjs');

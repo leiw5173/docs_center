@@ -25,6 +25,24 @@ function previewMessage({repository, number, revision, runId, deployment, review
   }
   const reviewUrl = sites[0]?.reviewUrl;
   if(reviewUrl) section(link('查看全部变更',reviewUrl));
+  const language = site => site.language==='zh'?'中文':'英文';
+  const changes = {added:'新增',modified:'修改',moved:'迁移'};
+  const pages = sites.flatMap(site=>site.pages?.map(page=>({site,page}))||[]);
+  if(pages.length) section(text(`【变更页面 · ${pages.length}】`));
+  for(const {site,page} of pages) {
+    paragraphs.push([text(`• ${[language(site),changes[page.change],page.title].filter(Boolean).join(' · ')}`)]);
+    paragraphs.push([text('　'+page.path)]);
+  }
+  const redirects = sites.flatMap(site=>site.redirects?.map(move=>({site,move}))||[]);
+  if(redirects.length) section(text(`【旧链接跳转 · ${redirects.length}】`));
+  for(const {site,move} of redirects) {
+    paragraphs.push([text(`• ${language(site)} · 旧址 ${move.sourcePath}`)]);
+    paragraphs.push([text(`　新址 ${move.targetPath}`)]);
+    for(const ref of move.references) {
+      const location = [ref.title,ref.section,ref.line?`第 ${ref.line} 行`:null].filter(Boolean).join(' · ');
+      paragraphs.push([text(`　${ref.direct?'直接引用':'间接引用'} · ${location}`)]);
+    }
+  }
   if(review?.findings.length) section(text('【复检发现】'));
   for(const finding of review?.findings||[]) {
     paragraphs.push([text(`• ${finding.severity==='error'?'阻断':'提醒'} · ${finding.title} · ${finding.message}`)]);

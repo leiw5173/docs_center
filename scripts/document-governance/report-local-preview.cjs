@@ -1,6 +1,26 @@
 const {previewSites,localBrowserOrigin} = require('./preview-sites.cjs');
 const {previewMessage,sendPreview} = require('./notify-preview.cjs');
 
+async function commentDeployment(api, number, revision) {
+  const marker = `<!-- document-local-preview:${revision} -->`;
+  const body = `${marker}\n已部署完成，请审查。\n\n候选修订 \`${revision.slice(0,12)}\``;
+  for (let page=1; page<=20; page++) {
+    const comments = await api(`issues/${number}/comments?per_page=100&page=${page}`);
+    const current = comments.find(item=>item.user?.login==='github-actions[bot]' && item.body?.startsWith(marker));
+    if (current) {
+      if (current.body!==body) await api(`issues/comments/${current.id}`,{body},'PATCH');
+      return;
+    }
+    if (comments.length<100) {
+      const pr = await api(`pulls/${number}`);
+      if (pr.state!=='open' || pr.head.sha!==revision) throw Error('候选 PR 已变化，请按当前修订重新检查');
+      await api(`issues/${number}/comments`,{body});
+      return;
+    }
+  }
+  throw Error('预览回报查找 PR 评论超出页数限制');
+}
+
 async function main() {
   const {GITHUB_REPOSITORY:repository,GITHUB_RUN_ID:runId,GH_TOKEN:token,
     DOCUMENT_PREVIEW_FEISHU_WEBHOOK:webhook,DOCUMENT_PREVIEW_FEISHU_SECRET:secret} = process.env;
@@ -26,9 +46,9 @@ async function main() {
     throw Error('浏览器复检未覆盖候选变更页');
   }
   const github = `https://github.com/${repository}`;
-  const api = async (path,body) => {
+  const api = async (path,body,method=body?'POST':'GET') => {
     const response = await fetch(`https://api.github.com/repos/${repository}/${path}`,{
-      method:body?'POST':'GET',
+      method,
       headers:{Authorization:`Bearer ${token}`,Accept:'application/vnd.github+json','Content-Type':'application/json'},
       body:body&&JSON.stringify(body),redirect:'error',signal:AbortSignal.timeout(15000)
     });
@@ -47,6 +67,7 @@ async function main() {
     description:failed?'本地部署完成，浏览器复检失败':'本地部署及浏览器复检通过',
     target_url:`${github}/actions/runs/${runId}`
   });
+  if (!failed) await commentDeployment(api,number,revision);
   if (!webhook) throw Error('未配置飞书机器人 Webhook');
   await sendPreview(webhook,secret,previewMessage({repository,number,revision,runId,
     deployment:'success',reviewOutcome:failed?'failure':'success',sites,review,local:true}));
@@ -54,4 +75,5 @@ async function main() {
   if (failed) process.exitCode=1;
 }
 
-main().catch(error=>{console.error(error.message);process.exitCode=1;});
+if (require.main===module) main().catch(error=>{console.error(error.message);process.exitCode=1;});
+module.exports = {commentDeployment};
