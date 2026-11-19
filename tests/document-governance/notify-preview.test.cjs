@@ -78,3 +78,20 @@ test('bilingual notifications link straight to documents, redirects and affected
   assert(affected.every(item=>new URL(item.href).searchParams.get('anchor')==='setup'));
   assert(!rows.some(row=>row.includes('自身引用')));
 });
+
+test('moved documents keep the path label and also link edited sections',()=>{
+  const article='https://preview.example/community/document/info?lang=zh&nodepath=a%2Fnew.md';
+  const sites=[{language:'zh',pages:[{title:'指南',path:'zh/new.md',url:article,change:'moved',content:{
+    status:'changed',sections:[{title:'配置',anchor:'配置',change:'modified'},{title:'旧命令',anchor:'安装',change:'removed'}]
+  }}],redirects:[]}];
+  const paragraphs=previewMessage({...options,sites}).paragraphs;
+  assert(paragraphs.flat().some(item=>item.text.includes('目录路径变更、修改正文')));
+  const links=paragraphs.flat().filter(item=>item.href?.startsWith(article));
+  assert.equal(new URL(links.find(item=>item.text==='配置').href).searchParams.get('anchor'),'配置');
+  assert.equal(new URL(links.find(item=>item.text==='查看当前上级章节').href).searchParams.get('anchor'),'安装');
+  assert(paragraphs.flat().some(item=>item.text.includes('删除章节 · 旧命令')));
+  const fallback=previewMessage({...options,sites,review:{
+    pageCount:1,redirectCount:0,findings:[{severity:'warning',title:'指南',url:article,missingSectionAnchor:'配置',message:'章节无法定位'}]
+  }});
+  assert.equal(fallback.paragraphs.flat().find(item=>item.text==='配置').href,article);
+});

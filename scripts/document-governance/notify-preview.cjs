@@ -25,12 +25,31 @@ function previewMessage({repository, number, revision, runId, deployment, review
   }
   const language = site => site.language==='zh'?'中文':'英文';
   const changes = {added:'新增文档',modified:'修改文档',moved:'目录路径变更'};
+  const sectionChanges = {added:'新增章节',modified:'修改章节',reordered:'调整章节顺序'};
   const pages = sites.flatMap(site=>site.pages?.map(page=>({site,page}))||[]);
   if(pages.length) section(text(`【变更页面 · ${pages.length}】`));
   for(const {site,page} of pages) {
-    const context = [language(site),changes[page.change]].filter(Boolean).join(' · ');
+    const bodyChanged = page.content?.status==='changed';
+    const change = bodyChanged && page.change==='moved' ? '目录路径变更、修改正文'
+      : bodyChanged ? '修改正文' : changes[page.change];
+    const context = [language(site),change].filter(Boolean).join(' · ');
     paragraphs.push([text(`• ${context} · `),link(page.title || page.path,page.url)]);
     paragraphs.push([text('　'+page.path)]);
+    if(page.content?.status==='unavailable') {
+      paragraphs.push([text(page.content.reason==='multiple-previous-pages'
+        ? '　有多个变更前页面，需人工核对正文差异。' : '　无法读取变更前的正文，需人工核对。')]);
+    }
+    for(const section of page.content?.sections||[]) {
+      const url = new URL(page.url);
+      const locatable = section.anchor && !review?.findings.some(finding=>
+        finding.missingSectionAnchor===section.anchor && new URL(finding.url).search===url.search);
+      if(locatable) url.searchParams.set('anchor',section.anchor);
+      if(section.change==='removed') {
+        paragraphs.push([text(`　删除章节 · ${section.title} · `),link(locatable?'查看当前上级章节':'查看当前正文',url.href)]);
+      } else {
+        paragraphs.push([text(`　${sectionChanges[section.change]} · `),link(section.title,url.href)]);
+      }
+    }
   }
   const redirects = sites.flatMap(site=>site.redirects?.map(move=>({site,move}))||[]);
   if(redirects.length) section(text(`【目录路径变更明细 · ${redirects.length}】`));

@@ -37,6 +37,7 @@ function checkReport(result) {
   });
   return {digest:result.digest,language:result.manifest.language,hasBaseline:before.size>0,
     errors:result.errors,warnings:result.warnings,checks,referenceImpact,versionReview,migrationReferences:result.migrationReferences||[],
+    documentChanges:result.documentChanges||{},
     addresses:{added,removed,redirects:result.manifest.redirects||{}}};
 }
 function commentSummary(report) {

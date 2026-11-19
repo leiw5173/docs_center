@@ -2,7 +2,7 @@ const fs=require('node:fs');
 const os=require('node:os');
 const path=require('node:path');
 const {execFileSync}=require('node:child_process');
-const {build,writePreview,validateRegistry,snapshot,sha,git,compareCandidate}=require('./core.cjs');
+const {analyze,build,writePreview,validateRegistry,snapshot,sha,git,compareCandidate}=require('./core.cjs');
 const {referenceGroups,selectGroup,releaseLocation,acceptedState,scopeFingerprint,affectedRepositories}=require('./groups.cjs');
 const {registrationFromIssue}=require('./registration.cjs');
 const {checkTranslationReview}=require('./translation-review.cjs');
@@ -10,6 +10,7 @@ const {commentSummary}=require('./check-report.cjs');
 const {onboardingFile,validateOnboarding,buildOnboarding,onboardingFiles}=require('./onboarding.cjs');
 const {bundleLocation,candidateLocation,makeBundle,validateBundle,candidateFiles}=require('./release-bundle.cjs');
 const {reconcileSource}=require('./reconcile-source.cjs');
+const {documentChanges}=require('./document-changes.cjs');
 const root=path.resolve(__dirname,'../..');
 const read=file=>JSON.parse(fs.readFileSync(file,'utf8'));
 const encode=value=>encodeURIComponent(value);
@@ -298,6 +299,27 @@ async function check(registry,temp,fileOverride=null,outputOverride=null) {
   }
   const stable=m=>{const {warnings,...rest}=m;return rest;};
   if(JSON.stringify(stable(input))!==JSON.stringify(stable(result.manifest)))result.errors.push({code:'manifest-mismatch',message:'Registry or immutable source differs from reviewed manifest'});
+  if(!result.errors.length) {
+    const available = new Map();
+    result.documentChanges = documentChanges(result,(scope,doc)=>{
+      const repository = selectedRegistry.repositories.find(item=>item.id===scope.repoId)?.repository;
+      const clone = roots[scope.repoId];
+      if (!clone || repository!==scope.repository || !/^[a-f0-9]{40}$/.test(scope.commit)) return null;
+      const key = scope.repoId+'/'+scope.commit;
+      if (!available.has(key)) {
+        try {
+          try { git(clone,'cat-file','-e',scope.commit+'^{commit}'); }
+          catch { execFileSync('git',['-C',clone,'fetch','--quiet','--no-tags',`https://github.com/${repository}.git`,scope.commit],{stdio:'pipe',timeout:120000}); }
+          available.set(key,true);
+        } catch { available.set(key,false); }
+      }
+      if (!available.get(key)) return null;
+      try {
+        const source = git(clone,'show',scope.commit+':'+doc.path);
+        return sha(source)===doc.sha256 ? analyze(source.toString('utf8')) : null;
+      } catch { return null; }
+    });
+  }
   const out=path.resolve(outputOverride||argument('--output',path.join(os.tmpdir(),'document-preview')));const report=writePreview(result,out);
   if(process.env.GITHUB_STEP_SUMMARY)fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,fs.readFileSync(path.join(out,'report.md')));
   if(process.env.GITHUB_ACTIONS==='true') {
@@ -522,7 +544,7 @@ async function backendPreview() {
     const report=reportDirectory ? read(path.join(reportDirectory,...(onboarding||manifests.length>1?[manifest.language]:[]),'report.json')) : null;
     if(report && (report.language!==manifest.language || !Array.isArray(report.migrationReferences))) throw Error('Invalid candidate migration report');
     const redirects=previews.migrationPreviews(manifest,previous,siteUrl,report?.migrationReferences);
-    const pages=previews.changedPages(manifest,previous,siteUrl,{declaredOnly:true});
+    const pages=previews.changedPages(manifest,previous,siteUrl,{declaredOnly:true,documentChanges:report?.documentChanges});
     const site={language:manifest.language,digest,url:siteUrl,pages,redirects};previews.previewSites([site]);
     const deployed=await fetch(siteUrl,{redirect:'error',signal:AbortSignal.timeout(30000)});
     if(!deployed.ok||!deployed.headers.get('content-type')?.includes('text/html')||!(await deployed.text()).includes('id="app"'))throw Error('Deployed preview is not the document center application');

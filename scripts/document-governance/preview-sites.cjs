@@ -11,7 +11,7 @@ function declaredDocuments(scope,language) {
   }
   return declared;
 }
-function changedPages(manifest,previous,siteUrl,{declaredOnly=false}={}) {
+function changedPages(manifest,previous,siteUrl,{declaredOnly=false,documentChanges={}}={}) {
   const before=new Map((previous?.scopes||[]).map(scope=>[scope.repoId,scope]));
   const oldDocs=new Map((previous?.scopes||[]).flatMap(scope=>scope.documents.map(doc=>[scope.repoId+'/'+doc.path,doc])));
   const moved=new Set(Object.entries(manifest.redirects||{}).filter(([from,to])=>previous?.redirects?.[from]!==to).map(([,to])=>to));
@@ -30,7 +30,8 @@ function changedPages(manifest,previous,siteUrl,{declaredOnly=false}={}) {
       if(old&&content(old)===content(doc)&&placement(previousScope)===placement(scope)&&!labelsChanged&&!feedbackChanged&&!moved.has(id))continue;
       const sourcePath=scope.prefix+'/'+doc.path.split('/').slice(1).join('/'),url=new URL('/community/document/info',siteUrl);
       url.search=new URLSearchParams({preview:new URL(siteUrl).searchParams.get('preview'),lang:manifest.language,nodepath:sourcePath});
-      pages.push({title:doc.title||doc.path,path:doc.path,sourcePath,change:moved.has(id)?'moved':old?'modified':'added',url:url.href});
+      pages.push({title:doc.title||doc.path,path:doc.path,sourcePath,change:moved.has(id)?'moved':old?'modified':'added',
+        url:url.href,...(Object.hasOwn(documentChanges,id)?{content:documentChanges[id]}:{})});
     }
   }
   return pages;
@@ -103,6 +104,15 @@ function previewSites(value) {
     for(const page of site.pages) {
       const link=new URL(page.url);
       if(paths.has(page.sourcePath)||typeof page.title!=='string'||typeof page.path!=='string'||directoryMetadata(page.path)||directoryMetadata(page.sourcePath)||!page.path.startsWith(site.language+'/')||!['added','modified','moved'].includes(page.change)||link.origin!==url.origin||link.hash||link.pathname!=='/community/document/info'||link.searchParams.get('preview')!==site.digest||link.searchParams.get('lang')!==site.language||link.searchParams.get('nodepath')!==page.sourcePath)throw Error('Invalid changed page preview');
+      if (page.content!==undefined) {
+        const content = page.content;
+        const compared = content?.status==='changed' && Array.isArray(content.sections) && content.sections.length>0 &&
+          content.sections.every(section=>typeof section?.title==='string' && typeof section.anchor==='string' &&
+            ['added','modified','removed','reordered'].includes(section.change));
+        const unavailable = content?.status==='unavailable' &&
+          ['missing-baseline','multiple-previous-pages'].includes(content.reason);
+        if (!compared && !unavailable) throw Error('Invalid document section changes');
+      }
       paths.add(page.sourcePath);
     }
     if(!Array.isArray(site.redirects))throw Error('Invalid migration preview links');

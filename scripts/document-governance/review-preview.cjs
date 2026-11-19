@@ -133,6 +133,12 @@ async function inspectPage(browser, site, candidate, paths) {
       return {headings:[...headings],blocks,images,links};
     },placeholder.source);
     failed.push(...sectionFindings(data.blocks));
+    for (const section of candidate.content?.sections||[]) {
+      if (section.anchor && !data.headings.includes(section.anchor)) {
+        failed.push({severity:'warning',missingSectionAnchor:section.anchor,
+          message:`浏览器未能定位「${section.title}」，通知链接将打开文章正文。`});
+      }
+    }
     for (const image of data.images) {
       if (!image.src) {
         failed.push({severity:'error',message:'预览正文的图片没有有效地址。',anchor:image.anchor});
