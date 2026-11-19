@@ -28,10 +28,9 @@ jobs:
     environment: document-preview
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
       checks: read
       statuses: write
-      issues: write
     steps:
       - uses: actions/checkout@v4
         with:

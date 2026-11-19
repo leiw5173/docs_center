@@ -52,7 +52,7 @@ async function main() {
       headers:{Authorization:`Bearer ${token}`,Accept:'application/vnd.github+json','Content-Type':'application/json'},
       body:body&&JSON.stringify(body),redirect:'error',signal:AbortSignal.timeout(15000)
     });
-    if (!response.ok) throw Error(`GitHub 回报请求失败（HTTP ${response.status}）`);
+    if (!response.ok) throw Error(`GitHub 回报请求失败（${method} ${path.split('?')[0]}，HTTP ${response.status}）`);
     return response.json();
   };
   const pr = await api(`pulls/${number}`);
