@@ -50,8 +50,6 @@ function navigationFindings(nodes, prefixes, parent = '') {
   return findings;
 }
 
-const text = value => String(value).replace(/[\r\n<>&\[\]*_`\\]/g,' ').slice(0,450);
-const link = url => url.replace(/[()]/g,c => c === '(' ? '%28' : '%29');
 const comparableAnchor = value => value.replace(/^_(?=\d)/,'').replace(/_/g,'-').toLowerCase();
 const samePreview = (url, site) =>
   url.origin === new URL(site.url).origin && url.searchParams.get('preview') === site.digest;
@@ -263,7 +261,8 @@ async function review(sites, browser) {
 }
 
 async function main() {
-  const sites = previewSites(process.env.DOCUMENT_PREVIEW_SITES);
+  const input = process.env.DOCUMENT_PREVIEW_SITES_FILE;
+  const sites = previewSites(input ? fs.readFileSync(input,'utf8') : process.env.DOCUMENT_PREVIEW_SITES);
   const {chromium} = require('playwright');
   const browser = await chromium.launch({args:['--no-sandbox']});
   let result;
@@ -271,15 +270,9 @@ async function main() {
   finally { await browser.close(); }
   const failures = result.findings.filter(f => f.severity === 'error').length;
   const warnings = result.findings.length - failures;
-  const lines = ['## 已部署预览复检','',`检查 ${result.pageCount} 个变更页面、${result.redirectCount} 条旧链接及候选目录，阻断 ${failures} 项，提醒 ${warnings} 项。`,'',
-    ...result.findings.slice(0,150).map(f=>`- ${f.severity === 'error' ? '阻断' : '提醒'} · [${text(f.title)}](${link(f.url)}) · ${text(f.message)}`)];
-  for (const failure of result.redirectFailures) {
-    lines.push('', '- 预期目标 '+text(failure.targetPath)+'。实际跳转路径 '+failure.path.map(url=>text(url)).join(' → ')+'。');
-  }
-  const file = process.argv[2];
-  fs.writeFileSync(file,JSON.stringify(result,null,2));
-  fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,lines.join('\n')+'\n');
-  fs.appendFileSync(process.env.GITHUB_OUTPUT,`review_status=${failures?'failed':'passed'}\nreview_summary=${result.pageCount} 个页面，${result.redirectCount} 条旧链接，阻断 ${failures} 项，提醒 ${warnings} 项\nredirect_failures=${JSON.stringify(result.redirectFailures)}\n`);
+  fs.writeFileSync(process.argv[2],JSON.stringify(result,null,2),{mode:0o600});
+  const summary=`检查 ${result.pageCount} 个变更页面、${result.redirectCount} 条旧链接，阻断 ${failures} 项，提醒 ${warnings} 项。`;
+  fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,'## 预览复检\n\n'+summary+'\n');
   if (failures) process.exitCode = 1;
 }
 

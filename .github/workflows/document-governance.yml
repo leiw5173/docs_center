@@ -150,11 +150,6 @@ jobs:
           retention-days: 14
   backend-preview:
     name: document-release-preview
-    outputs:
-      preview_sites: ${{ steps.staging.outputs.preview_sites }}
-      review_status: ${{ steps.review.outputs.review_status }}
-      review_summary: ${{ steps.review.outputs.review_summary }}
-      redirect_failures: ${{ steps.review.outputs.redirect_failures }}
     needs: preview
     if: always() && needs.preview.result == 'success' && github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
@@ -176,27 +171,29 @@ jobs:
       - name: Request backend staging artifact
         id: staging
         if: startsWith(github.head_ref, 'document-release/') || startsWith(github.head_ref, 'document-registration/')
-        run: node scripts/document-governance/run.cjs backend-preview --output "$RUNNER_TEMP/backend-preview/preview.zip" --check-report "$RUNNER_TEMP/document-check-report"
+        run: node scripts/document-governance/run.cjs backend-preview --output "$RUNNER_TEMP/backend-preview/preview.zip" --check-report "$RUNNER_TEMP/document-check-report" --sites-file "$RUNNER_TEMP/backend-preview/sites.json"
         env:
           GH_TOKEN: ${{ github.token }}
-          DOCUMENT_PREVIEW_URL: ${{ vars.DOCUMENT_PREVIEW_URL }}
+          DOCUMENT_PREVIEW_URL: ${{ secrets.DOCUMENT_PREVIEW_URL }}
           DOCUMENT_PREVIEW_TOKEN: ${{ secrets.DOCUMENT_PREVIEW_TOKEN }}
       - name: Install browser for deployed preview review
-        if: steps.staging.outputs.preview_sites != ''
+        if: steps.staging.outputs.preview_ready == 'true'
         run: npx --no-install playwright install --with-deps chromium
       - name: Review deployed document center
         id: review
-        if: steps.staging.outputs.preview_sites != ''
+        if: steps.staging.outputs.preview_ready == 'true'
         env:
-          DOCUMENT_PREVIEW_SITES: ${{ steps.staging.outputs.preview_sites }}
+          DOCUMENT_PREVIEW_SITES_FILE: ${{ runner.temp }}/backend-preview/sites.json
         run: node scripts/document-governance/review-preview.cjs "$RUNNER_TEMP/backend-preview/review.json"
-      - uses: actions/upload-artifact@v4
-        if: always() && steps.staging.outputs.preview_sites != ''
-        with:
-          name: backend-document-preview-${{ github.event.pull_request.head.sha }}
-          path: ${{ runner.temp }}/backend-preview
-          if-no-files-found: error
-          retention-days: 14
+      - name: Send preview result to Feishu
+        if: always() && steps.staging.outcome != 'skipped' && steps.staging.outcome != ''
+        continue-on-error: true
+        env:
+          DOCUMENT_PREVIEW_FEISHU_WEBHOOK: ${{ secrets.DOCUMENT_PREVIEW_FEISHU_WEBHOOK }}
+          DOCUMENT_PREVIEW_FEISHU_SECRET: ${{ secrets.DOCUMENT_PREVIEW_FEISHU_SECRET }}
+          DOCUMENT_PREVIEW_DEPLOYMENT_OUTCOME: ${{ steps.staging.outcome }}
+          DOCUMENT_PREVIEW_REVIEW_OUTCOME: ${{ steps.review.outcome }}
+        run: node scripts/document-governance/notify-preview.cjs "$RUNNER_TEMP/backend-preview"
   publish:
     if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged && (startsWith(github.event.pull_request.head.ref, 'document-release/') || startsWith(github.event.pull_request.head.ref, 'document-registration/'))
     runs-on: ubuntu-latest
