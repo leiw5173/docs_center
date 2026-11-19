@@ -33,3 +33,13 @@ test('failed deployments can notify without a test link and large previews split
   assert.equal(payloads.reduce((n,payload)=>n+JSON.parse(payload).content.post.zh_cn.content.length,0),100);
   await assert.rejects(sendPreview('https://unrelated.example/hook','',failed,()=>assert.fail('unexpected request')),/Feishu custom bot URL/);
 });
+
+test('local notifications give the host browser address instead of the runner network address',()=>{
+  const url='http://document-review-preview-gateway/community/document?lang=zh';
+  const page='http://document-review-preview-gateway/community/document/info?lang=zh';
+  const sites=[{language:'zh',url,pages:[{title:'变更正文',path:'zh/a.md',url:page}],redirects:[]}];
+  const message=previewMessage({...options,sites,local:true});
+  assert.match(message.title,/本地测试网.*已部署完成/);
+  assert(message.paragraphs.flat().some(item=>item.href==='http://127.0.0.1:18098/community/document/info?lang=zh'));
+  assert(!JSON.stringify(message).includes('document-review-preview-gateway'));
+});

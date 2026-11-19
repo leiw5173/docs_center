@@ -1,12 +1,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const {createHmac} = require('node:crypto');
-const {previewSites} = require('./preview-sites.cjs');
+const {previewSites,localPreviewMode,localPreviewOrigin,localBrowserOrigin} = require('./preview-sites.cjs');
 
 const text = value => ({tag:'text',text:String(value)});
 const link = (label, href) => ({tag:'a',text:label,href});
 
-function previewMessage({repository, number, revision, runId, deployment, reviewOutcome, sites, review}) {
+function previewMessage({repository, number, revision, runId, deployment, reviewOutcome, sites, review, local=false}) {
   if(!/^[\w-]+\/[\w.-]+$/.test(repository)||!Number.isSafeInteger(number)||
       !/^[a-f0-9]{40}$/.test(revision)||!/^\d+$/.test(runId)) throw Error('Invalid preview notification identity');
   const github = `https://github.com/${repository}`;
@@ -16,6 +16,7 @@ function previewMessage({repository, number, revision, runId, deployment, review
     [link(`候选 PR #${number}`, `${github}/pull/${number}`),text(' · '),link('CI 记录', `${github}/actions/runs/${runId}`)],
     [text(`候选修订 ${revision.slice(0,12)}`)]
   ];
+  if(local) paragraphs.push([text('本地预览链接仅可在运行测试服务的电脑打开。')]);
   if(review) {
     const failures = review.findings.filter(item=>item.severity==='error').length;
     paragraphs.push([text(`浏览器复检 · ${review.pageCount} 个页面，${review.redirectCount} 条旧链接，阻断 ${failures} 项，提醒 ${review.findings.length-failures} 项。`)]);
@@ -40,7 +41,13 @@ function previewMessage({repository, number, revision, runId, deployment, review
     paragraphs.push([text((finding.severity==='error'?'阻断':'提醒')+' · '),
       link(finding.title,finding.url),text(' · '+finding.message)]);
   }
-  return {title:'文档中心测试网 · '+status,paragraphs};
+  if(local) {
+    for(const paragraph of paragraphs) for(const item of paragraph) {
+      if(item.href?.startsWith(localPreviewOrigin+'/')) item.href=localBrowserOrigin+item.href.slice(localPreviewOrigin.length);
+      if(item.tag==='text') item.text=item.text.replaceAll(localPreviewOrigin+'/',localBrowserOrigin+'/');
+    }
+  }
+  return {title:(local?'文档中心本地测试网 · ':'文档中心测试网 · ')+status,paragraphs};
 }
 
 function feishuPayloads(message, secret, timestamp) {
@@ -104,7 +111,7 @@ async function main() {
   const message = previewMessage({
     repository:process.env.GITHUB_REPOSITORY,number:pr.number,revision:pr.head.sha,runId:process.env.GITHUB_RUN_ID,
     deployment:process.env.DOCUMENT_PREVIEW_DEPLOYMENT_OUTCOME,reviewOutcome:process.env.DOCUMENT_PREVIEW_REVIEW_OUTCOME,
-    sites:locations?previewSites(locations):[],review:readOptional('review.json')
+    sites:locations?previewSites(locations):[],review:readOptional('review.json'),local:localPreviewMode()
   });
   await sendPreview(webhook,secret,message);
   console.log('文档中心测试网结果已发送到飞书。');

@@ -503,17 +503,19 @@ async function backendPreview() {
     const location=candidateLocation(pr.head.ref), document=await remoteFile(location.file);
     manifests=location.id?validateBundle(document,location):[document];
   }
-  const base=process.env.DOCUMENT_PREVIEW_URL,token=process.env.DOCUMENT_PREVIEW_TOKEN;
+  const previews=require('./preview-sites.cjs'),local=previews.localPreviewMode();
+  const base=local?previews.localBrowserOrigin:process.env.DOCUMENT_PREVIEW_URL,token=process.env.DOCUMENT_PREVIEW_TOKEN;
   if(!base||!token)throw Error('Backend candidate preview environment is not configured');
-  const url=new URL('/admin/documents/previews',base);if(url.protocol!=='https:')throw Error('Preview endpoint must use HTTPS');
-  const sites=[],previews=require('./preview-sites.cjs');
+  const url=new URL('/admin/documents/previews',base);if(!local&&url.protocol!=='https:')throw Error('Preview endpoint must use HTTPS');
+  const sites=[];
   for(const manifest of manifests){
     const response=await fetch(url,{method:'POST',redirect:'error',headers:{'Content-Type':'application/json','X-Document-Preview-Token':token},body:JSON.stringify(onboarding?{registration,manifest}:manifest),signal:AbortSignal.timeout(120000)});
     if(!response.ok||!response.headers.get('content-type')?.includes('application/zip'))throw Error(`Backend preview failed: HTTP ${response.status}`);
     const chunks=[];let size=0;for await(const chunk of response.body){size+=chunk.length;if(size>128*1024*1024)throw Error('Preview exceeds 128 MiB');chunks.push(chunk);}
     const configured=argument('--output',path.join(os.tmpdir(),'backend-preview.zip'));const out=manifests.length>1||onboarding?path.join(path.dirname(path.resolve(configured)),`preview-${manifest.language}.zip`):configured;
     fs.mkdirSync(path.dirname(out),{recursive:true});fs.writeFileSync(out,Buffer.concat(chunks));
-    const digest=sha(JSON.stringify(manifest)),siteUrl=response.headers.get('x-document-preview-url');
+    const digest=sha(JSON.stringify(manifest)),linkedSite=response.headers.get('x-document-preview-url');
+    const siteUrl=linkedSite&&local ? new URL('/community/document'+new URL(linkedSite).search,base).href : linkedSite;
     if(!siteUrl)throw Error('Candidate artifact exists but test site was not deployed');
     const previous=baseState(manifest.language);
     const reportDirectory=argument('--check-report');
